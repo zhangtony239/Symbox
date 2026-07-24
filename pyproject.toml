@@ -1,0 +1,10 @@
+[project]
+name = "symbox"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ltms>=0.1.0",
+    "z3-solver>=5.0.0.0",
+]
