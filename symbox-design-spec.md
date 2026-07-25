@@ -1,8 +1,8 @@
-# Symbox 设计规范 v0.2 — 语法驱动的符号推理沙盒
+# Symbox 设计规范 v0.3 — 语法驱动的符号推理沙盒
 
-> **日期**: 2026-07-24
+> **日期**: 2026-07-25
 > **作者**: Tony（概念设计）/ Toni（整理）
-> **状态**: 核心设计已拍板，JSON 接口 + 混动 Adj 方案确定
+> **状态**: CLI 接口 + 阈值检测 Adj + snapper 式 backup 确定
 > **关联**: GitHub Issue #1（开题）, `symbox-heritage-research.md`（工具调研）
 
 ---
@@ -11,9 +11,9 @@
 
 Symbox 用**自然语言的语法范畴**（主-谓-形-标签）做知识表示的类型系统，Python OOP 做实现载体，ltms 式真值传播做推理引擎。
 
-LLM 通过 **标准 JSON** 操作这些语法对象——不是自然语言，不是伪代码，是 LLM 最熟悉的结构化输出。系统自动维护逻辑一致性，幻觉在产生时就被拦截。
+LLM 通过 **CLI tool** 操作这些语法对象——shell 原生、pipe 组合、任何 agent 框架都能调。系统自动维护逻辑一致性，幻觉在产生时就被拦截。
 
-**设计原则**：语法范畴（主语/动词/Adj/tags）是**内部建模的本体论**，不是**输入格式**。LLM 面对的是简洁的 JSON API，底层引擎用主谓形标签组织知识——两层各归各位。
+**设计原则**：语法范畴（主语/动词/Adj/tags）是**内部建模的本体论**，不是**输入格式**。LLM 面对的是简洁的 CLI 命令，底层引擎用主谓形标签组织知识——两层各归各位。
 
 ---
 
@@ -30,58 +30,85 @@ LLM 通过 **标准 JSON** 操作这些语法对象——不是自然语言，�
 
 ---
 
-## 2.5 JSON 接口规范（LLM 的操作界面）
+## 2.5 CLI 接口规范（LLM 的操作界面）
 
-LLM 通过标准 JSON 操作 Symbox，每个操作是一个原子事务：
+LLM 通过 CLI 操作 Symbox，每个命令是一个原子事务：
 
-### 声明主语
-```json
-{"op": "declare", "type": "subject", "class": "Person", "id": "tony"}
-{"op": "declare", "type": "subject", "class": "Device", "id": "laptop", "state": {"battery": 0.05}}
+### 对象生命周期
+```bash
+/sbox create [obj_name]
+/sbox delete [obj_name]
 ```
 
-**状态覆写 = 重新声明**：第二次 `declare` 同一个 id，引擎 diff 出变化，沿 justification 链传播修正。
-
-### 声明关系
-```json
-{"op": "relate", "verb": "Owns", "args": ["tony", "laptop"]}
+### 函数绑定（动词规则 / Adj 语义 / Worry 条件）
+```bash
+/sbox bind [obj_name] [func_name] -f src.py [--verb]
+/sbox unbind [obj_name] [func_name] [--verb]
 ```
 
-### 挂载/更新 Adj（混动设计）
-
-**方式 A — 显式 set（主）**：
-```json
-{"op": "patch", "target": "laptop", "set": {"Broken": false, "Fixed": true}}
-```
-原子完成反转 + 新增，无歧义，一轮搞定。LLM 知道当前状态时用这条。
-
-**方式 B — embedding 反问（辅）**：
-```json
-{"op": "patch", "target": "laptop", "adj": "Fixed"}
-```
-引擎检测到 `Fixed` 与现有 `Broken` 反义，返回确认请求：
-```json
-{"status": "confirm_needed", "question": "是将 Broken 置为 false 的意思吗？", "target": "laptop", "conflict": "Broken", "proposed": "Fixed"}
-```
-LLM 确认后引擎执行反转。LLM 不确定当前状态时用这条，引擎兜底防幻觉。
-
-### 声明 Worry
-```json
-{"op": "declare", "type": "worry", "watch": "laptop", "condition": "battery < 0.2", "as": "low_battery"}
+**bind 函数签名**（约定）：
+```python
+def check(s, o) -> bool:
+    """s: 主语属性 dict, o: 宾语属性 dict。返回 True 通过，False 矛盾"""
+    ...
 ```
 
-### 上下文操作（假设层）
-```json
-{"op": "push_context", "label": "假设 laptop 没坏"}
-{"op": "declare", "type": "subject", "class": "Device", "id": "laptop", "state": {"battery": 0.05, "status": "working"}}
-{"op": "pop_context"}
+**verb 标记**：`--verb` 标记的 obj 才能站在动词位（`S V O` 中的 V）。verb 和 adj 存储等价，仅标记区分。
+
+**Worry 实现**：继承 `Worry` class 写检查函数，bind 到对象上，无需特殊处理。
+```python
+class LowBatteryWorry(Worry):
+    def check(self, s, o):
+        return s.get("battery", 1.0) > 0.2
 ```
 
-### 提交校验
-```json
-{"op": "commit"}
+### 属性操作（带阈值检测）
+```bash
+/sbox set [obj_name] ['k':'v','k2':'v2'] [--force]
+/sbox unset [obj_name] ['k','k2']
 ```
-将当前事务批次打包校验：一致则写入主图，矛盾则返回 `conflicts` 数组报错。
+
+**阈值检测**：新 key 与现有 key 的 embedding 相似度 > `SIMILARITY_THRESHOLD`（默认 0.9，`.env` 可调）时，返回确认请求：
+```json
+{"status": "confirm_needed", "question": "\"Fixed\" 与现有 \"Broken\" 高度相似，是反转还是新增？", "target": "laptop", "existing": "Broken", "proposed": "Fixed"}
+```
+LLM 确认后加 `--force` 强制执行。
+
+### SVO 断言
+```bash
+/sbox [obj_S] [obj_V] [obj_O] [--if-force]
+```
+
+默认触发 ltms 检查，矛盾则报错不入图。`--if-force` 视其为条件，把其他冲突点"按下葫芦浮起瓢"（自动调整使断言成立）。
+
+**原子性**：有报错都不入图，只有成功才更新图。
+
+### 查询
+```bash
+/sbox list ["objects"|"verbs"|"backups"|obj_name]
+```
+
+## 2.6 Backup 版本控制（snapper 语法）
+
+借鉴 snapper 的语法，底层调用 git 实现磁盘持久化：
+
+```bash
+/sbox backup create 'note-as-id'      # 打快照
+/sbox backup delete ['id1','id2']     # 删除快照
+/sbox backup rollback 'note-as-id'    # 回滚到快照
+/sbox backup log                      # 查看快照历史
+```
+
+**存储位置**：`./.sbox/backups/`（项目本地，git 裸仓库）。
+
+**与 v0.2 三层结构的映射**：
+| 层 | CLI 实现 |
+|---|---------|
+| Committed | 默认操作，成功即入图 |
+| Hypothetical | `backup create` → 实验操作 → `backup rollback` |
+| Conflict | 非零 exit + stderr / 零 exit + JSON `{status: "conflict", conflicts: [...]}` |
+
+**设计哲学**：Unix 哲学——一切是文件，版本控制用 git，agent 生态原生。
 
 ---
 
@@ -126,24 +153,33 @@ w = Worry(watch=battery, condition=lambda b: b.level < 0.2)
 | A | 实例化即检查（`Eats(person, apple)` 一创建就抛异常） | 即时反馈 | 只能抓单关系矛盾，跨关系矛盾漏掉 |
 | **B（已拍板）** | 注册到全局引擎，统一传播调度 | 能发现跨关系矛盾，复用 ltms 传播算法 | 需要引擎基础设施 |
 
-### 4.2 Adj 混动设计（已拍板）
+### 4.2 Adj 阈值检测设计（已拍板）
 
-Adj 是 dict，支持多属性共存，显式声明反转：
+Adj 是 dict，支持多属性共存，显式声明为主，embedding 阈值检测兜底：
 
 ```python
 laptop.adj = {
-    "Broken": {"value": True, "since": "2026-07-24T10:00", "justification": [...]},
+    "Broken": {"value": True, "since": "2026-07-25T10:00", "justification": [...]},
     "Fixed": {"value": False, "since": None, "justification": []},
-    "Old": {"value": True, "since": "2026-07-24T09:00", "justification": [...]},
+    "Old": {"value": True, "since": "2026-07-25T09:00", "justification": [...]},
 }
 ```
 
 | 方式 | 场景 | 机制 |
 |------|------|------|
-| **显式 set（主）** | LLM 知道当前状态 | `{"set": {"Broken": false, "Fixed": true}}` 原子反转 |
-| **embedding 反问（辅）** | LLM 不确定当前状态 | 引擎检测反义，返回确认请求，LLM 裁决 |
+| **显式 set（主）** | LLM 知道当前状态 | `/sbox set laptop ['Fixed':true]` 直接写入 |
+| **阈值检测（辅）** | 新 key 与现有 key 相似度 > `SIMILARITY_THRESHOLD` | 返回确认请求，LLM 加 `--force` 裁决 |
 
-**混动价值**: 显式 set 保证效率，embedding 反问给 LLM 留出幻觉鲁棒性——当 LLM 对状态记忆模糊时，引擎主动提醒潜在冲突，防止不一致溜进主图。
+**阈值检测价值**: 显式 set 保证效率，阈值检测在 LLM 状态记忆模糊时被动触发，防止 `"Fixed"` 和 `"Broken"` 这类近义/反义 key 同时溜进主图造成不一致。
+
+**Embedding 配置**（复用 TimeIndex 方案，`.env` 控制）：
+```bash
+EMBEDDING_BASE_URL=https://api.openai.com/v1  # 或 http://localhost:11434/v1 (Ollama)
+EMBEDDING_API_KEY=***
+EMBEDDING_MODEL=text-embedding-3-small  # 或 nomic-embed-text (Ollama)
+SIMILARITY_THRESHOLD=0.9
+```
+未配置或调用失败时降级为精确字符串匹配，阈值检测自动禁用。
 
 **Adj patch 的两种语义**（保留）：
 - **拦截型 (veto)**：直接阻止动词成立 → 矛盾（如 `Rotten` 阻止 `Eats`）
@@ -181,16 +217,17 @@ ltms 的精髓：每个节点有 **true / false / unknown** 三态，justificati
 | 选项 | 评价 |
 |------|------|
 | 自然语言解析 | ❌ 脱裤子放屁，LLM 不需要"组织语言" |
-| **标准 JSON（已拍板）** | ✅ LLM 最熟悉的输出格式，function calling 原生支持 |
+| 标准 JSON | ❌ 不够 agent 原生，pipe 组合能力弱 |
+| **CLI tool（已拍板）** | ✅ shell 原生、pipe 组合、任何 agent 框架都能调 |
 
 **三层结构**：
-| 层 | 机制 | JSON 对应 |
+| 层 | 机制 | CLI 对应 |
 |---|------|----------|
-| Committed | 校验通过写入主图 | 普通 `declare`/`relate` |
-| Hypothetical | 假设层操作 | `push_context` → 操作 → `pop_context` |
-| Conflict | 校验失败报错 | 返回值带 `conflicts` 数组 |
+| Committed | 校验通过写入主图 | 普通 `create`/`set`/`SVO` |
+| Hypothetical | 假设层操作 | `backup create` → 操作 → `backup rollback` |
+| Conflict | 校验失败报错 | 非零 exit + stderr / 零 exit + JSON `{status, conflicts}` |
 
-**原子事务**: 每个 JSON 操作是一个原子事务，或 LLM 显式 `commit` 打包校验。
+**原子事务**: 每个 CLI 命令是一个原子事务，成功才更新图。
 
 ---
 
@@ -204,17 +241,18 @@ ltms 的精髓：每个节点有 **true / false / unknown** 三态，justificati
 | Truth Maintenance System | 真值传播 + 信念修正 | Doyle 1979, de Kleer 1986 |
 | Fluent (situation calculus) | Worry 监控值域变化 | McCarthy 1963 |
 | 认知架构 (SOAR/ACT-R) | Attention 元认知 | 1980s- |
+| Git / Snapper | Backup 版本控制 | 2005 / 2008 |
 
 ---
 
-## 6. 架构预览（决策拍板后细化）
+## 6. 架构预览
 
 ```
 ┌─────────────────────────────────────────┐
-│           LLM (function calling)         │
-│    create_subject / create_verb / ...    │
+│           LLM / Agent                    │
+│    /sbox create / set / SVO / backup     │
 └──────────────────┬──────────────────────┘
-                   │ 语法外壳 (OOP objects)
+                   │ CLI (shell)
 ┌──────────────────▼──────────────────────┐
 │           Symbox Engine                  │
 │  ┌──────────┐ ┌──────────┐ ┌─────────┐ │
@@ -222,26 +260,39 @@ ltms 的精髓：每个节点有 **true / false / unknown** 三态，justificati
 │  │ Table    │ │ cation   │ │ iction  │ │
 │  │ (t/f/u)  │ │ Graph    │ │ Detector│ │
 │  └──────────┘ └──────────┘ └─────────┘ │
-│  ┌──────────┐ ┌──────────┐             │
-│  │ Worry    │ │ Belief   │             │
-│  │ Monitor  │ │ Revision │             │
-│  └──────────┘ └──────────┘             │
+│  ┌──────────┐ ┌──────────┐ ┌─────────┐ │
+│  │ Worry    │ │ Belief   │ │ Embedding│ │
+│  │ Monitor  │ │ Revision │ │ Threshold│ │
+│  └──────────┘ └──────────┘ └─────────┘ │
+│  ┌─────────────────────────────────────┐ │
+│  │ Backup Store (git裸仓库)            │ │
+│  │ ./.sbox/backups/                    │ │
+│  └─────────────────────────────────────┘ │
 └─────────────────────────────────────────┘
          │ 可选后端
     ┌────┴────┐
     Z3    PySAT
 ```
 
+**数据流**：
+1. LLM 执行 `/sbox set laptop ['Fixed':true]`
+2. 引擎检查 embedding 阈值（`Fixed` vs `Broken` 相似度 0.92 > 0.9）
+3. 返回确认请求，LLM 加 `--force` 确认
+4. 引擎更新 Adj dict，沿 justification 链传播
+5. 自动触发 git commit（backup）
+
 ---
 
 ## 7. 下一步
 
 - [x] Tony 拍板核心设计决策（§4 全部已定）
-- [ ] Tony 亲自 code Layer 0 核心引擎
+- [ ] Tony 亲自 code Layer 0 核心引擎（CLI 接口 + ltms 传播 + git backup）
 - [ ] 画 draw.io 宏观架构图（Issue #1 任务①）
 - [ ] 同步本文档到 GitHub Issue（给 nahanhhan 对齐）
 - [ ] 读 ltms 源码，提取 TMS 算法模式（供引擎参考）
+- [ ] 复用 TimeIndex embedding_provider 到 Symbox
+- [ ] 实现 `.env` 配置加载（SIMILARITY_THRESHOLD / EMBEDDING_*）
 
 ---
 
-*v0.2 — 2026-07-24 by Toni，基于 Tony 的语法猜想 + JSON 接口 + 混动 Adj 方案整理*
+*v0.3 — 2026-07-25 by Toni，基于 Tony 的 CLI 设计 + 阈值检测 Adj + snapper 式 backup 整理*
