@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyc
 
 # ==========================================
 # 2. 虚拟环境 (Virtual Environments)
