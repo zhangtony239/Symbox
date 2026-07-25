@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import tempfile
@@ -20,15 +19,11 @@ def cli_runner(monkeypatch):
 def test_cli_create_and_list(cli_runner):
     res = cli_runner.invoke(cli, ["create", "robot", "--kind", "physical"])
     assert res.exit_code == 0
-    data = json.loads(res.output)
-    assert data["status"] == "success"
-    assert data["object"]["name"] == "robot"
+    assert "created: robot (physical)" in res.output
 
     res_list = cli_runner.invoke(cli, ["list", "objects"])
     assert res_list.exit_code == 0
-    list_data = json.loads(res_list.output)
-    assert len(list_data) == 1
-    assert list_data[0]["name"] == "robot"
+    assert "robot (physical)" in res_list.output
 
 
 def test_cli_set_and_threshold_confirm(cli_runner):
@@ -37,22 +32,19 @@ def test_cli_set_and_threshold_confirm(cli_runner):
     # Set Broken=true
     res1 = cli_runner.invoke(cli, ["set", "laptop", "{'Broken': true}"])
     assert res1.exit_code == 0
-    data1 = json.loads(res1.output)
-    assert data1["status"] == "success"
+    assert "updated: laptop" in res1.output
 
-    # Set Fixed=true without --force -> triggers confirm_needed JSON
+    # Set Fixed=true without --force -> triggers confirm needed prompt
     res2 = cli_runner.invoke(cli, ["set", "laptop", "{'Fixed': true}"])
     assert res2.exit_code == 0
-    data2 = json.loads(res2.output)
-    assert data2["status"] == "confirm_needed"
-    assert data2["existing"] == "Broken"
-    assert data2["proposed"] == "Fixed"
+    assert "confirm needed:" in res2.output
+    assert "existing: Broken" in res2.output
+    assert "proposed: Fixed" in res2.output
 
     # Set Fixed=true with --force -> succeeds
     res3 = cli_runner.invoke(cli, ["set", "laptop", "{'Fixed': true}", "--force"])
     assert res3.exit_code == 0
-    data3 = json.loads(res3.output)
-    assert data3["status"] == "success"
+    assert "updated: laptop" in res3.output
 
 
 def test_cli_svo_and_backup(cli_runner):
@@ -62,25 +54,28 @@ def test_cli_svo_and_backup(cli_runner):
     # Assert SVO
     res_svo = cli_runner.invoke(cli, ["svo", "robot", "Operates", "task"])
     assert res_svo.exit_code == 0
-    data_svo = json.loads(res_svo.output)
-    assert data_svo["status"] == "success"
+    assert "asserted: robot Operates task" in res_svo.output
 
     # Backup create
     res_b1 = cli_runner.invoke(cli, ["backup", "create", "v1.0"])
     assert res_b1.exit_code == 0
+    assert "backup created: v1.0" in res_b1.output
 
     # Backup log
     res_log = cli_runner.invoke(cli, ["backup", "log"])
     assert res_log.exit_code == 0
-    history = json.loads(res_log.output)
-    assert len(history) >= 1
-    assert history[0]["note"] == "v1.0"
+    assert "v1.0" in res_log.output
+
+
+def test_cli_error_output(cli_runner):
+    # Deleting a missing object -> error on stderr-ish output + non-zero exit
+    res = cli_runner.invoke(cli, ["delete", "ghost"])
+    assert res.exit_code == 1
+    assert "error: object 'ghost' not found" in res.output
 
 
 def test_cli_slash_prefix_handling(cli_runner):
     # Test slash prefix in object arguments and subcommands
     res = cli_runner.invoke(cli, ["create", "/person"])
     assert res.exit_code == 0
-    data = json.loads(res.output)
-    assert data["status"] == "success"
-    assert data["object"]["name"] == "person"
+    assert "created: person (physical)" in res.output

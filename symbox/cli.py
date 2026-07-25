@@ -1,16 +1,106 @@
-import json
 import ast
+import json
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import click
 from symbox.core.engine import SymboxEngine
 
 
-def print_json_or_text(data: Any, json_output: bool = True) -> None:
-    if json_output or isinstance(data, dict):
-        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
-    else:
-        click.echo(str(data))
+def echo_error(message: str) -> None:
+    """Print an error message to stderr (callers are responsible for exit code)."""
+    click.echo(f"error: {message}", err=True)
+
+
+def _format_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "-"
+    if isinstance(value, (list, set)):
+        return ", ".join(str(v) for v in value) if value else "-"
+    if isinstance(value, dict):
+        return ", ".join(f"{k}={_format_value(v)}" for k, v in value.items()) if value else "-"
+    return str(value)
+
+
+def format_subject(data: Dict[str, Any]) -> str:
+    """Format a Subject/Worry dict as human-readable text."""
+    lines = [f"{data.get('name', '?')} ({data.get('kind', 'physical')})"]
+
+    watch = data.get("watch_subject_name")
+    if watch:
+        lines.append(f"  watches: {watch}")
+        lines.append(f"  active: {_format_value(data.get('is_active'))}")
+        if data.get("func_name"):
+            lines.append(f"  condition: {data['func_name']} ({data.get('module_path', '-')})")
+
+    attributes = data.get("attributes") or {}
+    if attributes:
+        lines.append("  attributes:")
+        for k, v in attributes.items():
+            lines.append(f"    {k}: {_format_value(v)}")
+
+    adj = data.get("adj") or {}
+    if adj:
+        lines.append("  adj:")
+        for k, v in adj.items():
+            value = v.get("value") if isinstance(v, dict) else v
+            lines.append(f"    {k} = {_format_value(value)}")
+
+    tags = data.get("tags") or []
+    if tags:
+        lines.append(f"  tags: {', '.join(tags)}")
+
+    return "\n".join(lines)
+
+
+def format_verb(data: Dict[str, Any]) -> str:
+    """Format a Verb dict as human-readable text."""
+    lines = [f"{data.get('name', '?')} (verb)"]
+    if data.get("func_name"):
+        lines.append(f"  check: {data['func_name']} ({data.get('module_path', '-')})")
+    if data.get("domain"):
+        lines.append(f"  domain: {_format_value(data['domain'])}")
+    if data.get("range"):
+        lines.append(f"  range: {_format_value(data['range'])}")
+    if data.get("veto_rules"):
+        lines.append(f"  veto: {_format_value(data['veto_rules'])}")
+    if data.get("modify_rules"):
+        lines.append(f"  modify: {_format_value(data['modify_rules'])}")
+    return "\n".join(lines)
+
+
+def format_backup(entry: Dict[str, Any]) -> str:
+    """Format one backup log entry as a single line."""
+    return f"{entry.get('commit', '????????')}  {entry.get('timestamp', '-')}  {entry.get('note', '-')}"
+
+
+def print_listing(data: Any) -> None:
+    """Print list_summary() output (subjects, verbs, backups, or single entity)."""
+    if isinstance(data, dict):
+        if "error" in data:
+            echo_error(data["error"])
+            sys.exit(1)
+        # Single entity: subject or verb
+        if data.get("is_verb") or "veto_rules" in data:
+            click.echo(format_verb(data))
+        else:
+            click.echo(format_subject(data))
+        return
+
+    if not data:
+        click.echo("(empty)")
+        return
+
+    blocks = []
+    for item in data:
+        if "commit" in item and "note" in item:
+            blocks.append(format_backup(item))
+        elif item.get("is_verb") or "veto_rules" in item:
+            blocks.append(format_verb(item))
+        else:
+            blocks.append(format_subject(item))
+    click.echo("\n\n".join(blocks))
 
 
 def parse_kv_input(raw_input: str) -> Dict[str, Any]:
@@ -76,9 +166,9 @@ def cli(ctx: click.Context) -> None:
             engine = SymboxEngine()
             success, msg = engine.assert_svo(s_name, v_name, o_name, if_force=if_force)
             if success:
-                print_json_or_text({"status": "success", "message": msg, "svo": [s_name, v_name, o_name]})
+                click.echo(f"asserted: {s_name} {v_name} {o_name}")
             else:
-                print_json_or_text({"status": "contradiction", "error": msg})
+                echo_error(f"contradiction: {msg}")
                 sys.exit(1)
         else:
             click.echo(ctx.get_help())
@@ -92,7 +182,7 @@ def create(obj_name: str, kind: str) -> None:
     obj_name = obj_name.lstrip("/")
     engine = SymboxEngine()
     subj = engine.create_subject(name=obj_name, kind=kind)
-    print_json_or_text({"status": "success", "object": subj.to_dict()})
+    click.echo(f"created: {subj.name} ({subj.kind})")
 
 
 @cli.command("delete")
@@ -103,9 +193,9 @@ def delete(obj_name: str) -> None:
     engine = SymboxEngine()
     success = engine.delete_subject(name=obj_name)
     if success:
-        print_json_or_text({"status": "success", "message": f"Object '{obj_name}' deleted."})
+        click.echo(f"deleted: {obj_name}")
     else:
-        print_json_or_text({"status": "error", "message": f"Object '{obj_name}' not found."})
+        echo_error(f"object '{obj_name}' not found")
         sys.exit(1)
 
 
@@ -120,9 +210,10 @@ def bind(obj_name: str, func_name: str, file_path: str, verb: bool) -> None:
     engine = SymboxEngine()
     try:
         engine.bind_function(target_name=obj_name, func_name=func_name, file_path=file_path, is_verb=verb)
-        print_json_or_text({"status": "success", "message": f"Bound '{func_name}' from '{file_path}' to '{obj_name}'."})
+        target_kind = "verb" if verb else "object"
+        click.echo(f"bound: {func_name} ({file_path}) -> {target_kind} '{obj_name}'")
     except Exception as e:
-        print_json_or_text({"status": "error", "message": str(e)})
+        echo_error(str(e))
         sys.exit(1)
 
 
@@ -136,9 +227,9 @@ def unbind(obj_name: str, func_name: str, verb: bool) -> None:
     engine = SymboxEngine()
     success = engine.unbind_function(target_name=obj_name, func_name=func_name, is_verb=verb)
     if success:
-        print_json_or_text({"status": "success", "message": f"Unbound '{func_name}' from '{obj_name}'."})
+        click.echo(f"unbound: {func_name} from '{obj_name}'")
     else:
-        print_json_or_text({"status": "error", "message": f"Failed to unbind '{func_name}'."})
+        echo_error(f"failed to unbind '{func_name}' from '{obj_name}'")
         sys.exit(1)
 
 
@@ -154,14 +245,21 @@ def set_cmd(obj_name: str, kv_data: str, force: bool) -> None:
 
     success, conf_data = engine.set_attributes(obj_name=obj_name, kv_pairs=kv_pairs, force=force)
     if not success and conf_data:
-        # Confirm needed response
-        print_json_or_text(conf_data)
+        # Confirm needed: plain question, exit 0 so the agent can retry with --force
+        click.echo(f"confirm needed: {conf_data['question']}")
+        click.echo(f"  target:   {conf_data['target']}")
+        click.echo(f"  existing: {conf_data['existing']}")
+        click.echo(f"  proposed: {conf_data['proposed']}")
+        if "similarity" in conf_data:
+            click.echo(f"  similarity: {conf_data['similarity']}")
+        click.echo("re-run with --force to confirm.")
         sys.exit(0)
     elif success:
         subj = engine.subjects[obj_name]
-        print_json_or_text({"status": "success", "object": subj.to_dict()})
+        click.echo(f"updated: {obj_name}")
+        click.echo(format_subject(subj.to_dict()))
     else:
-        print_json_or_text({"status": "error", "message": "Failed to set attributes."})
+        echo_error(f"failed to set attributes on '{obj_name}'")
         sys.exit(1)
 
 
@@ -174,9 +272,9 @@ def unset(obj_name: str, keys: List[str]) -> None:
     engine = SymboxEngine()
     success = engine.unset_attributes(obj_name=obj_name, keys=list(keys))
     if success:
-        print_json_or_text({"status": "success", "object": engine.subjects[obj_name].to_dict()})
+        click.echo(f"unset: {', '.join(keys)} on '{obj_name}'")
     else:
-        print_json_or_text({"status": "error", "message": f"Object '{obj_name}' not found."})
+        echo_error(f"object '{obj_name}' not found")
         sys.exit(1)
 
 
@@ -194,9 +292,9 @@ def svo_cmd(s_name: str, v_name: str, o_name: str, if_force: bool) -> None:
 
     success, msg = engine.assert_svo(s_name, v_name, o_name, if_force=if_force)
     if success:
-        print_json_or_text({"status": "success", "message": msg, "svo": [s_name, v_name, o_name]})
+        click.echo(f"asserted: {s_name} {v_name} {o_name}")
     else:
-        print_json_or_text({"status": "contradiction", "error": msg})
+        echo_error(f"contradiction: {msg}")
         sys.exit(1)
 
 
@@ -207,7 +305,7 @@ def list_cmd(target: str) -> None:
     target = target.lstrip("/")
     engine = SymboxEngine()
     data = engine.list_summary(target=target)
-    print_json_or_text(data)
+    print_listing(data)
 
 
 @cli.group("backup")
@@ -222,7 +320,7 @@ def backup_create(note: str) -> None:
     """Create a new backup snapshot."""
     engine = SymboxEngine()
     tag_id = engine.backup.create(note=note)
-    print_json_or_text({"status": "success", "backup_id": tag_id, "note": note})
+    click.echo(f"backup created: {tag_id}")
 
 
 @backup_group.command("rollback")
@@ -234,9 +332,9 @@ def backup_rollback(note_or_id: str) -> None:
         engine.backup.rollback(note_or_id=note_or_id)
         # Reload state after rollback
         engine.load_state()
-        print_json_or_text({"status": "success", "message": f"Rolled back to '{note_or_id}'."})
+        click.echo(f"rolled back to: {note_or_id}")
     except Exception as e:
-        print_json_or_text({"status": "error", "message": str(e)})
+        echo_error(str(e))
         sys.exit(1)
 
 
@@ -246,7 +344,10 @@ def backup_delete(ids: List[str]) -> None:
     """Delete specified backup snapshots."""
     engine = SymboxEngine()
     deleted = engine.backup.delete(ids=list(ids))
-    print_json_or_text({"status": "success", "deleted": deleted})
+    if deleted:
+        click.echo(f"backup deleted: {', '.join(deleted)}")
+    else:
+        click.echo("no backups deleted.")
 
 
 @backup_group.command("log")
@@ -254,7 +355,11 @@ def backup_log() -> None:
     """View backup snapshot history."""
     engine = SymboxEngine()
     history = engine.backup.log()
-    print_json_or_text(history)
+    if not history:
+        click.echo("(no backups)")
+        return
+    for entry in history:
+        click.echo(format_backup(entry))
 
 
 def main() -> None:

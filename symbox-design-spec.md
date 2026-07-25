@@ -68,9 +68,13 @@ class LowBatteryWorry(Worry):
 /sbox unset [obj_name] ['k','k2']
 ```
 
-**阈值检测**：新 key 与现有 key 的 embedding 相似度 > `SIMILARITY_THRESHOLD`（默认 0.9，`.env` 可调）时，返回确认请求：
-```json
-{"status": "confirm_needed", "question": "\"Fixed\" 与现有 \"Broken\" 高度相似，是反转还是新增？", "target": "laptop", "existing": "Broken", "proposed": "Fixed"}
+**阈值检测**：新 key 与现有 key 的 embedding 相似度 > `SIMILARITY_THRESHOLD`（默认 0.9，`.env` 可调）时，返回确认请求（普通文本，exit 0）：
+```text
+confirm needed: "Fixed" 与现有 "Broken" 高度相似 (0.95 >= 0.9)，是反转还是新增？
+  target:   laptop
+  existing: Broken
+  proposed: Fixed
+re-run with --force to confirm.
 ```
 LLM 确认后加 `--force` 强制执行。
 
@@ -106,7 +110,7 @@ LLM 确认后加 `--force` 强制执行。
 |---|---------|
 | Committed | 默认操作，成功即入图 |
 | Hypothetical | `backup create` → 实验操作 → `backup rollback` |
-| Conflict | 非零 exit + stderr / 零 exit + JSON `{status: "conflict", conflicts: [...]}` |
+| Conflict | 非零 exit + stderr 错误文本（`error: ...`） |
 
 **设计哲学**：Unix 哲学——一切是文件，版本控制用 git，agent 生态原生。
 
@@ -225,7 +229,7 @@ ltms 的精髓：每个节点有 **true / false / unknown** 三态，justificati
 |---|------|----------|
 | Committed | 校验通过写入主图 | 普通 `create`/`set`/`SVO` |
 | Hypothetical | 假设层操作 | `backup create` → 操作 → `backup rollback` |
-| Conflict | 校验失败报错 | 非零 exit + stderr / 零 exit + JSON `{status, conflicts}` |
+| Conflict | 校验失败报错 | 非零 exit + stderr 错误文本（`error: ...`） |
 
 **原子事务**: 每个 CLI 命令是一个原子事务，成功才更新图。
 

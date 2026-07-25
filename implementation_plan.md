@@ -87,7 +87,7 @@ This plan details the full implementation of Symbox, its CLI delivered via `uv t
   - `svo [S] [V] [O] [--if-force]` and fallback positional `sbox [S] [V] [O] [--if-force]`
   - `list [objects|verbs|backups|obj_name]`
   - `backup [create|delete|rollback|log]`
-- Standardized JSON and formatted text output, non-zero exit code on unhandled contradictions.
+- Human-readable plain-text CLI output (no JSON), errors to stderr, non-zero exit code on unhandled contradictions.
 
 #### [NEW] [symbox/__init__.py](file:///c:/repos/Symbox/symbox/__init__.py)
 - Expose main version and core classes.

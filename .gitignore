@@ -1,1 +1,83 @@
+# ==========================================
+# 1. Python 运行时 & 编译产生的二进制 / 缓存文件
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# 2. 虚拟环境 (Virtual Environments)
+# ==========================================
 .venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+bin/
+include/
+lib/
+lib64/
+
+# ==========================================
+# 3. 环境变量与敏感配置信息 (非常重要！)
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ==========================================
+# 4. 开发工具 & 编辑器 (IDE / Editors)
+# ==========================================
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm / IntelliJ
+.idea/
+
+# Jupyter Notebook 缓存
+.ipynb_checkpoints
+
+# macOS & Windows 系统临时文件
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# 5. 打包 & 发布文件 (Distribution / Packaging)
+# ==========================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+
+# ==========================================
+# 6. 测试 & 代码质量工具缓存 (Testing & Linting)
+# ==========================================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# ==========================================
+# 7. 日志与数据库文件
+# ==========================================
+*.log
+*.sqlite
+*.sqlite3
