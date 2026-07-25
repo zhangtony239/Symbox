@@ -1,10 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "symbox"
 version = "0.1.0"
-description = "Add your description here"
+description = "Syntax-driven symbolic reasoning sandbox"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "ltms>=0.1.0",
     "z3-solver>=5.0.0.0",
+    "click>=8.1.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+    "pytest>=8.0.0",
 ]
+
+[project.scripts]
+sbox = "symbox.cli:main"
