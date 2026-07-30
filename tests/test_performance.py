@@ -62,10 +62,11 @@ def test_rapid_worry_observation_performance(tmp_sbox_dir):
 
     for i in range(num_worries):
         limit = 0.1 + (i * 0.005)
+        # v0.4 polarity (spec §3.1): condition True = healthy, False = triggered
         worry = Worry(
             name=f"BatteryWorry_{i}",
             watch_subject_name="robot",
-            condition_func=lambda s, l=limit: s.attributes.get("battery", 1.0) < l,
+            condition_func=lambda s, l=limit: s.attributes.get("battery", 1.0) >= l,
         )
         worry.engine_callback = engine._on_worry_triggered
         engine.subjects[f"BatteryWorry_{i}"] = worry

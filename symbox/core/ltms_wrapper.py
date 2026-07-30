@@ -77,6 +77,24 @@ class LTMSWrapper:
         except ltms.LTMSContradiction as e:
             raise ContradictionError(f"LTMS Contradiction adding veto rule ({adj_key} vetoes {svo_key}): {e}")
 
+    def add_requires_clause(self, condition_key: str, svo_key: str) -> None:
+        """Add clause: svo_key requires condition_key -> (OR condition_key (NOT svo_key)).
+
+        Used for the v0.4 Worry polarity (spec §3.1): an SVO assertion requires
+        the Worry health node to be TRUE (healthy). If the node is FALSE
+        (contradiction), asserting the SVO raises a contradiction.
+        """
+        cond_node = self.get_or_create_node(condition_key, is_assumption=True)
+        svo_node = self.get_or_create_node(svo_key, is_assumption=True)
+
+        # (OR condition_key (NOT svo_key)): true_nodes=[cond_node], false_nodes=[svo_node]
+        try:
+            self.tms.add_clause(true_nodes=[cond_node], false_nodes=[svo_node])
+        except ltms.LTMSContradiction as e:
+            raise ContradictionError(
+                f"LTMS Contradiction adding requires rule ({svo_key} requires {condition_key}): {e}"
+            )
+
     def assert_svo(self, svo_key: str, if_force: bool = False) -> None:
         """Assert an SVO relation node as True."""
         svo_node = self.get_or_create_node(svo_key, is_assumption=True)

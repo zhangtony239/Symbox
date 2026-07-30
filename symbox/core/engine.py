@@ -11,13 +11,20 @@ from symbox.core.verb import Verb
 
 
 class SymboxEngine:
-    """Central reasoning engine coordinating objects, LTMS, embedding detection, and backups."""
+    """Central reasoning engine coordinating objects, LTMS, embedding detection, and backups.
+
+    v1 layer (spec v0.4 §6.0): ltms basic propagation only — sound but not
+    complete; deep contradictions outside the propagation frontier may pass.
+    Z3 global satisfiability + minimal repair sets are v2 scope.
+    """
 
     def __init__(self, sbox_dir: str = "./.sbox"):
         self.sbox_dir = sbox_dir
         self.subjects: Dict[str, Subject] = {}
         self.verbs: Dict[str, Verb] = {}
         self.svo_triples: List[Dict[str, str]] = []
+        # Unresolved propagation conflicts recorded during Worry node flips (v1: non-fatal)
+        self.conflicts: List[str] = []
 
         self.ltms = LTMSWrapper(title="symbox_main")
         self.embedding = EmbeddingDetector()
@@ -124,9 +131,18 @@ class SymboxEngine:
         return False
 
     def _on_worry_triggered(self, worry: Worry, triggered: bool) -> None:
-        """Observer callback when Worry condition triggers."""
+        """Observer callback when a Worry condition flips (ECA Action, spec §3.1).
+
+        Node polarity (v0.4): True = healthy/normal, False = contradiction.
+        A flip to False propagates through the justification network; if the
+        propagation conflicts with committed SVO facts, v1 records the
+        conflict instead of crashing the triggering transaction.
+        """
         worry_node_key = f"Worry:{worry.name}"
-        self.ltms.set_node_truth(worry_node_key, is_true=triggered, force=True)
+        try:
+            self.ltms.set_node_truth(worry_node_key, is_true=not triggered, force=True)
+        except Exception as e:
+            self.conflicts.append(f"Worry '{worry.name}' node flip conflict: {e}")
 
     def set_attributes(
         self, obj_name: str, kv_pairs: Dict[str, Any], force: bool = False
@@ -210,11 +226,11 @@ class SymboxEngine:
                 adj_key = f"Adj:{o_name}:{veto_adj}"
                 self.ltms.add_veto_clause(adj_key, svo_key)
 
-        # 4. Worry node check (e.g. LowBattery forbids Operates)
+        # 4. Worry node check (ECA: an unhealthy Worry forbids the SVO, spec §3.1)
         for w_name, w_obj in self.subjects.items():
             if isinstance(w_obj, Worry) and w_obj.is_active:
                 worry_key = f"Worry:{w_name}"
-                self.ltms.add_veto_clause(worry_key, svo_key)
+                self.ltms.add_requires_clause(worry_key, svo_key)
 
         # 5. LTMS assertion & truth propagation
         try:

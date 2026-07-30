@@ -245,14 +245,8 @@ def set_cmd(obj_name: str, kv_data: str, force: bool) -> None:
 
     success, conf_data = engine.set_attributes(obj_name=obj_name, kv_pairs=kv_pairs, force=force)
     if not success and conf_data:
-        # Confirm needed: plain question, exit 0 so the agent can retry with --force
-        click.echo(f"confirm needed: {conf_data['question']}")
-        click.echo(f"  target:   {conf_data['target']}")
-        click.echo(f"  existing: {conf_data['existing']}")
-        click.echo(f"  proposed: {conf_data['proposed']}")
-        if "similarity" in conf_data:
-            click.echo(f"  similarity: {conf_data['similarity']}")
-        click.echo("re-run with --force to confirm.")
+        # Confirm needed: JSON response (spec v0.4 §2.5), exit 0 so the agent can retry with --force
+        click.echo(json.dumps(conf_data, ensure_ascii=False))
         sys.exit(0)
     elif success:
         subj = engine.subjects[obj_name]

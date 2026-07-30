@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -34,12 +35,15 @@ def test_cli_set_and_threshold_confirm(cli_runner):
     assert res1.exit_code == 0
     assert "updated: laptop" in res1.output
 
-    # Set Fixed=true without --force -> triggers confirm needed prompt
+    # Set Fixed=true without --force -> triggers confirm_needed JSON (spec v0.4 §2.5)
     res2 = cli_runner.invoke(cli, ["set", "laptop", "{'Fixed': true}"])
     assert res2.exit_code == 0
-    assert "confirm needed:" in res2.output
-    assert "existing: Broken" in res2.output
-    assert "proposed: Fixed" in res2.output
+    conf = json.loads(res2.output)
+    assert conf["status"] == "confirm_needed"
+    assert conf["target"] == "laptop"
+    assert conf["existing"] == "Broken"
+    assert conf["proposed"] == "Fixed"
+    assert "question" in conf
 
     # Set Fixed=true with --force -> succeeds
     res3 = cli_runner.invoke(cli, ["set", "laptop", "{'Fixed': true}", "--force"])

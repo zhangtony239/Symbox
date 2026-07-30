@@ -48,24 +48,78 @@ def test_worry_observer_and_symbol_compilation(tmp_sbox_dir):
     engine = SymboxEngine(sbox_dir=tmp_sbox_dir)
     robot = engine.create_subject("robot", kind="physical")
 
-    # Define low battery condition function
-    def low_battery_condition(s: Subject) -> bool:
-        return s.attributes.get("battery", 1.0) < 0.2
+    # v0.4 polarity (spec §3.1): check returns True = healthy, False = triggered
+    def battery_healthy(s: Subject) -> bool:
+        return s.attributes.get("battery", 1.0) > 0.2
 
-    worry = Worry(name="LowBattery", watch_subject_name="robot", condition_func=low_battery_condition)
+    worry = Worry(name="BatteryHealthy", watch_subject_name="robot", condition_func=battery_healthy)
     worry.engine_callback = engine._on_worry_triggered
-    engine.subjects["LowBattery"] = worry
+    engine.subjects["BatteryHealthy"] = worry
     robot.register_worry_observer(worry)
 
-    # Initial state battery = 1.0
+    # Healthy battery: worry not triggered, node not yet flipped
     robot.set_attribute("battery", 0.9)
     assert worry.is_active is False
-    assert engine.ltms.get_node_label("Worry:LowBattery") == "UNKNOWN"
+    assert engine.ltms.get_node_label("Worry:BatteryHealthy") == "UNKNOWN"
 
-    # Battery drops to 0.1 -> triggers Worry
+    # Battery drops to 0.1 -> unhealthy, worry triggered, node False = contradiction (spec §3.1)
     robot.set_attribute("battery", 0.1)
     assert worry.is_active is True
-    assert engine.ltms.get_node_label("Worry:LowBattery") == "TRUE"
+    assert engine.ltms.get_node_label("Worry:BatteryHealthy") == "FALSE"
+
+    # Battery recovers -> healthy again, node True = normal
+    robot.set_attribute("battery", 0.9)
+    assert worry.is_active is False
+    assert engine.ltms.get_node_label("Worry:BatteryHealthy") == "TRUE"
+
+
+def test_worry_subclass_check_binding(tmp_sbox_dir):
+    """v0.4 §2.5: Worry subclass overriding check(s, o) must be evaluated (ECA condition)."""
+    engine = SymboxEngine(sbox_dir=tmp_sbox_dir)
+    robot = engine.create_subject("robot", kind="physical")
+
+    class BatteryHealthy(Worry):
+        def check(self, s, o):
+            return s.get("battery", 1.0) > 0.2  # True = normal, False = triggers propagation
+
+    worry = BatteryHealthy(name="BatteryHealthy", watch_subject_name="robot")
+    worry.engine_callback = engine._on_worry_triggered
+    engine.subjects["BatteryHealthy"] = worry
+    robot.register_worry_observer(worry)
+
+    robot.set_attribute("battery", 0.1)
+    assert worry.is_active is True
+    assert engine.ltms.get_node_label("Worry:BatteryHealthy") == "FALSE"
+
+
+def test_unhealthy_worry_blocks_svo(tmp_sbox_dir):
+    """v0.4 §3.1: an unhealthy Worry (node False) forbids new SVO assertions."""
+    engine = SymboxEngine(sbox_dir=tmp_sbox_dir)
+    robot = engine.create_subject("robot", kind="physical")
+    engine.create_subject("task", kind="physical")
+    engine.create_subject("task2", kind="physical")
+
+    def battery_healthy(s: Subject) -> bool:
+        return s.attributes.get("battery", 1.0) > 0.2
+
+    worry = Worry(name="BatteryHealthy", watch_subject_name="robot", condition_func=battery_healthy)
+    worry.engine_callback = engine._on_worry_triggered
+    engine.subjects["BatteryHealthy"] = worry
+    robot.register_worry_observer(worry)
+
+    # Healthy battery -> SVO allowed
+    robot.set_attribute("battery", 0.9)
+    success, _ = engine.assert_svo("robot", "Operates", "task")
+    assert success is True
+
+    # Drain battery -> worry triggered (node False = contradiction)
+    robot.set_attribute("battery", 0.1)
+    assert worry.is_active is True
+
+    # New SVO blocked by the requires clause (SVO requires Worry node healthy)
+    success2, msg2 = engine.assert_svo("robot", "Operates", "task2")
+    assert success2 is False
+    assert "Contradiction" in msg2
 
 
 def test_veto_rule_contradiction(tmp_sbox_dir):

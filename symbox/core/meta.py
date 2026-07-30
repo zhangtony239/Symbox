@@ -5,8 +5,13 @@ from symbox.core.subject import Subject
 class Worry(Subject):
     """Worry object (Meta Subject) bridging value-domain to symbol-domain.
 
-    Monitors values of a watched subject (e.g., battery.level < 0.2)
-    and flips symbol nodes in the LTMS network.
+    Mechanically an ECA rule (spec v0.4 §3.1): attribute set = Event,
+    check() = Condition, node flip triggering propagation = Action.
+
+    Polarity convention (v0.4 §3.1): check()/condition returns
+    **True = state normal / validation passed**, **False = triggers
+    contradiction propagation**. The LTMS node mirrors this:
+    True = healthy, False = contradiction.
     """
 
     def __init__(
@@ -29,25 +34,33 @@ class Worry(Subject):
     def check(self, subject_attrs: Dict[str, Any], object_attrs: Dict[str, Any]) -> bool:
         """Convention check signature def check(self, s, o) -> bool.
 
-        Returns True if condition is clean, False if condition is violated/triggered.
+        v0.4 polarity (spec §3.1): returns True if the state is normal /
+        validation passes, False if the health condition is violated
+        (triggers contradiction propagation).
         """
         if self.condition_func is not None:
             # Create transient subject wrapper if needed
             transient_s = Subject(name=self.watch_subject_name or "s", attributes=subject_attrs)
-            return self.condition_func(transient_s)
+            return bool(self.condition_func(transient_s))
         return True
 
     def evaluate(self, target_subject: Subject) -> bool:
-        """Evaluate condition on target subject. Returns True if worry condition is triggered (active)."""
-        if self.condition_func is not None:
-            try:
-                # Worry triggers when condition is met (e.g. battery < 0.2)
-                # If condition_func returns True for low battery, worry is triggered.
-                triggered = bool(self.condition_func(target_subject))
-                return triggered
-            except Exception:
-                return False
-        return False
+        """Evaluate health condition on target subject.
+
+        Returns True if the worry is triggered (active), i.e. the health
+        condition is NOT met (check()/condition returned False, spec §3.1).
+        Supports both plain condition_func and bound Worry subclasses
+        overriding check(s, o) (spec §2.5).
+        """
+        try:
+            if self.condition_func is not None:
+                healthy = bool(self.condition_func(target_subject))
+            else:
+                healthy = bool(self.check(target_subject.attributes, {}))
+            # v0.4 polarity: True = normal, False = triggered
+            return not healthy
+        except Exception:
+            return False
 
     def evaluate_and_trigger(self, target_subject: Subject) -> None:
         """Observer hook invoked on target subject attribute modification (Section 4.4 Choice A)."""
