@@ -53,7 +53,7 @@
 - [x] 7.1 实现 `now` token parser，区分 Subject、Verb、位置论元和 `key=value` 论元
 - [x] 7.2 使用 Python signature 将 Subject 绑定为显式第一参数，并解析必需参数、默认值、重复参数和未知参数
 - [x] 7.3 实现 Verb True=通过/False=冲突的检查流程及结构化诊断
-- [ ] 7.4 将通过的 SVK 注册为粗粒度真值节点并接入 Adj veto/modify 与统一传播
+- [x] 7.4 将通过的 SVK 注册为粗粒度真值节点并接入 Adj veto/modify 与统一传播
 - [ ] 7.5 添加零后置论元、多个位置论元、混合参数、顺序等价和参数差异身份测试
 - [ ] 7.6 添加端到端测试确认只暴露 `now`，不形成 `svo` 兼容面
 
