@@ -5,8 +5,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from symbox.application.embedding_ports import EmbeddingConfig, EmbeddingError
-from symbox.integrations.embeddings import OpenAIEmbeddingProvider, cosine_similarity
+from symbox.application.embedding_ports import EmbeddingConfig, EmbeddingError, cosine_similarity
+from symbox.integrations.embeddings import OpenAIEmbeddingProvider
 
 
 def test_provider_sends_openai_compatible_request_and_restores_index_order() -> None:

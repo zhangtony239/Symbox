@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
 
 import httpx
 
@@ -103,16 +102,3 @@ def _parse_vectors(payload: object, expected_count: int) -> tuple[tuple[float, .
     if set(indexed) != set(range(expected_count)):
         raise EmbeddingError("embedding response indices do not cover every input")
     return tuple(indexed[index] for index in range(expected_count))
-
-
-def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
-    """Compute finite cosine similarity for equal non-zero vectors."""
-    if not left or len(left) != len(right):
-        raise ValueError("cosine vectors must be non-empty and equal length")
-    if not all(math.isfinite(value) for value in (*left, *right)):
-        raise ValueError("cosine vectors must contain finite values")
-    left_norm = math.sqrt(sum(value * value for value in left))
-    right_norm = math.sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        raise ValueError("cosine similarity is undefined for zero vectors")
-    return sum(a * b for a, b in zip(left, right, strict=True)) / (left_norm * right_norm)

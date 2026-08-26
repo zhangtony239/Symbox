@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -69,3 +71,16 @@ class EmbeddingProvider(Protocol):
     def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
         """Return one finite, non-empty vector for every input text."""
         ...
+
+
+def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    """Compute finite cosine similarity for equal non-zero vectors."""
+    if not left or len(left) != len(right):
+        raise ValueError("cosine vectors must be non-empty and equal length")
+    if not all(math.isfinite(value) for value in (*left, *right)):
+        raise ValueError("cosine vectors must contain finite values")
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm == 0 or right_norm == 0:
+        raise ValueError("cosine similarity is undefined for zero vectors")
+    return sum(a * b for a, b in zip(left, right, strict=True)) / (left_norm * right_norm)
