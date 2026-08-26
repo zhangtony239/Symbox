@@ -11,11 +11,11 @@
 - [x] 2.2 实现 `physical`、`abstract`、`meta` 分类和 Verb domain/range 类型校验
 - [x] 2.3 实现 NodeKey codec 的转义、解析和 round-trip 测试
 - [x] 2.4 实现规范 JSON value codec 与 SVK SHA-256 身份生成，并覆盖参数顺序、默认值和碰撞测试
-- [ ] 2.5 实现显式/派生/assumption 来源模型及 Adj、tag 多来源撤回规则
+- [x] 2.5 实现显式/派生/assumption 来源模型及 Adj、tag 多来源撤回规则
 
 ## 3. 状态仓储与事务边界
 
-- [ ] 3.1 定义带 schema version 的 `.sbox/state.json` 格式和规范序列化/反序列化
+- [x] 3.1 定义带 schema version 的 `.sbox/state.json` 格式和规范序列化/反序列化
 - [ ] 3.2 实现项目作用域发现、状态加载、损坏/未知版本拒绝和凭据排除测试
 - [ ] 3.3 实现临时文件、flush/fsync、原子 replace 的状态写入
 - [ ] 3.4 实现候选状态事务协调器，保证任一阶段失败时领域状态与磁盘状态均不变
