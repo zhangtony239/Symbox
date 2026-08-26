@@ -1,0 +1,13 @@
+LICENSE
+README.md
+pyproject.toml
+src/symbox/__init__.py
+src/symbox.egg-info/PKG-INFO
+src/symbox.egg-info/SOURCES.txt
+src/symbox.egg-info/dependency_links.txt
+src/symbox.egg-info/entry_points.txt
+src/symbox.egg-info/requires.txt
+src/symbox.egg-info/top_level.txt
+src/symbox/cli/__init__.py
+src/symbox/cli/main.py
+tests/test_package.py

@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: symbox
+Version: 0.6.0
+Summary: An atomic symbolic state and truth-maintenance CLI for agents
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: ltms>=0.1.0
+Requires-Dist: z3-solver>=5.0.0.0
+Dynamic: license-file

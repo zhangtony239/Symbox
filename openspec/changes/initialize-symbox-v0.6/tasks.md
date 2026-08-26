@@ -1,7 +1,7 @@
 ## 1. 工程骨架与契约测试
 
-- [ ] 1.1 配置 Python 包目录、`sbox` 命令入口、开发/测试依赖与基础 lint/type/test 命令
-- [ ] 1.2 建立 `cli`、`application`、`domain`、`kernel`、`persistence`、`integrations` 分层及依赖方向测试
+- [x] 1.1 配置 Python 包目录、`sbox` 命令入口、开发/测试依赖与基础 lint/type/test 命令
+- [x] 1.2 建立 `cli`、`application`、`domain`、`kernel`、`persistence`、`integrations` 分层及依赖方向测试
 - [ ] 1.3 将七个 capability spec 的场景映射为可追踪的 pytest 契约测试骨架
 - [ ] 1.4 定义统一 JSON result envelope、错误分类、退出码并添加 CLI golden tests
 
