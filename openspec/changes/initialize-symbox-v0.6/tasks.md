@@ -23,7 +23,7 @@
 
 ## 4. TruthKernel 与 LTMS 适配
 
-- [ ] 4.1 定义 TruthKernel 端口、三值枚举、节点/assumption/justification/解释数据结构
+- [x] 4.1 定义 TruthKernel 端口、三值枚举、节点/assumption/justification/解释数据结构
 - [ ] 4.2 实现测试用 in-memory fake kernel 并完成端口 contract tests
 - [ ] 4.3 调研并实现 `ltms` adapter 的节点注册、justification、撤回和传播映射
 - [ ] 4.4 实现候选 kernel clone；若库不支持安全 clone，则实现从领域快照确定性重建
