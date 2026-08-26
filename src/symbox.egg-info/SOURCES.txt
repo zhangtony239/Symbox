@@ -8,6 +8,11 @@ src/symbox.egg-info/dependency_links.txt
 src/symbox.egg-info/entry_points.txt
 src/symbox.egg-info/requires.txt
 src/symbox.egg-info/top_level.txt
+src/symbox/application/__init__.py
 src/symbox/cli/__init__.py
 src/symbox/cli/main.py
+src/symbox/domain/__init__.py
+src/symbox/integrations/__init__.py
+src/symbox/kernel/__init__.py
+src/symbox/persistence/__init__.py
 tests/test_package.py
