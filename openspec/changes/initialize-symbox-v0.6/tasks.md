@@ -40,7 +40,7 @@
 
 ## 6. 属性、相似度与 tag 派生
 
-- [ ] 6.1 实现 set/unset 的批量解析、原子更新、属性来源及 justification 同步
+- [x] 6.1 实现 set/unset 的批量解析、原子更新、属性来源及 justification 同步
 - [ ] 6.2 定义 embedding provider 端口和环境配置加载，确保 API key 不持久化
 - [ ] 6.3 实现 OpenAI-compatible embedding provider、超时、余弦相似度与可选缓存
 - [ ] 6.4 实现严格 `score > SIMILARITY_THRESHOLD` 的 `confirm_needed` envelope 和 `--force` 重试语义
