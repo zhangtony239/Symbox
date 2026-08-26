@@ -64,6 +64,7 @@ def test_justification_propagates_and_retracts(kernel_factory: KernelFactory) ->
     assert kernel.truth(safe) is TruthValue.TRUE
     explanation = kernel.explain(safe)
     assert explanation.supports[0].premises == (robot,)
+    assert explanation.supports[0].premise_values == (TruthValue.TRUE,)
 
     kernel.retract_justification("robot-is-safe")
     kernel.propagate()

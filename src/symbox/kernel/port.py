@@ -83,11 +83,21 @@ class SupportRef:
     support_id: str
     kind: str
     premises: tuple[NodeKey, ...] = ()
+    premise_values: tuple[TruthValue, ...] = ()
+    value: TruthValue = TruthValue.TRUE
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "support_id", _required_name(self.support_id, "support id"))
         if self.kind not in {"assumption", "justification"}:
             raise DomainInvariantError("support kind must be assumption or justification")
+        if self.value is TruthValue.UNKNOWN:
+            raise DomainInvariantError("support cannot establish unknown")
+        if self.kind == "assumption" and (self.premises or self.premise_values):
+            raise DomainInvariantError("assumption support cannot have premises")
+        if len(self.premises) != len(self.premise_values):
+            raise DomainInvariantError("support premise nodes and values must have equal length")
+        if any(value is TruthValue.UNKNOWN for value in self.premise_values):
+            raise DomainInvariantError("support premises cannot require unknown")
 
 
 @dataclass(frozen=True, slots=True)

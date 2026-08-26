@@ -100,7 +100,11 @@ class InMemoryTruthKernel:
         previous = dict(self._truths)
         supports: dict[tuple[NodeKey, TruthValue], set[SupportRef]] = {}
         for assumption in self._assumptions.values():
-            support = SupportRef(assumption.assumption_id, "assumption")
+            support = SupportRef(
+                assumption.assumption_id,
+                "assumption",
+                value=assumption.value,
+            )
             supports.setdefault((assumption.node, assumption.value), set()).add(support)
 
         changed = True
@@ -112,6 +116,8 @@ class InMemoryTruthKernel:
                         rule.justification_id,
                         "justification",
                         tuple(premise.node for premise in rule.premises),
+                        tuple(premise.expected for premise in rule.premises),
+                        rule.conclusion_value,
                     )
                     target = supports.setdefault((rule.conclusion, rule.conclusion_value), set())
                     if support not in target:

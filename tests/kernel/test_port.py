@@ -48,6 +48,13 @@ def test_assumptions_and_justifications_preserve_polarity() -> None:
             (Premise(NodeKey.subject("source")), Premise(NodeKey.subject("source"))),
         ),
         lambda: SupportRef("support", "other"),
+        lambda: SupportRef("support", "assumption", (NodeKey.subject("robot"),)),
+        lambda: SupportRef(
+            "support",
+            "justification",
+            (NodeKey.subject("robot"),),
+            (),
+        ),
     ],
 )
 def test_invalid_kernel_values_are_rejected(factory: object) -> None:
