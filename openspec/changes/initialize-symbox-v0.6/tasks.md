@@ -45,7 +45,7 @@
 - [x] 6.3 实现 OpenAI-compatible embedding provider、超时、余弦相似度与可选缓存
 - [x] 6.4 实现严格 `score > SIMILARITY_THRESHOLD` 的 `confirm_needed` envelope 和 `--force` 重试语义
 - [x] 6.5 实现未配置/调用失败时精确名称降级及 degraded diagnostics
-- [ ] 6.6 实现 `implies_tags` 自动派生、多来源撤回和同名显式 tag 保留
+- [x] 6.6 实现 `implies_tags` 自动派生、多来源撤回和同名显式 tag 保留
 - [ ] 6.7 添加批量部分失败、阈值边界、降级、强制确认和 tag 来源测试
 
 ## 7. SVK now 关系断言
