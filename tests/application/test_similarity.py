@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from symbox.application.similarity import find_similar_key, similarity_confirmation
+from symbox.application.embedding_ports import EmbeddingError
+from symbox.application.similarity import (
+    assess_similarity,
+    find_similar_key,
+    similarity_confirmation,
+)
 from symbox.cli.confirmations import confirmation_envelope
 from symbox.cli.results import ExitCode, ResultStatus
 
@@ -15,6 +20,11 @@ class StaticProvider:
     def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
         self.calls += 1
         return tuple(self.vectors[text] for text in texts)
+
+
+class FailingProvider:
+    def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        raise EmbeddingError("injected timeout")
 
 
 def test_strictly_greater_score_returns_structured_confirmation() -> None:
@@ -73,3 +83,48 @@ def test_best_match_is_deterministic_by_score_then_name() -> None:
 
     assert match is not None
     assert match.existing_key == "temper"
+
+
+def test_unconfigured_provider_degrades_without_blocking_write() -> None:
+    assessment = assess_similarity(
+        None,
+        subject="robot",
+        proposed_key="temp",
+        existing_keys=("temperature",),
+        threshold=0.9,
+    )
+
+    assert assessment.confirmation is None
+    assert assessment.diagnostics[0].degraded
+    assert assessment.diagnostics[0].code == "embedding_not_configured"
+
+
+def test_provider_failure_degrades_to_exact_name_semantics() -> None:
+    assessment = assess_similarity(
+        FailingProvider(),
+        subject="robot",
+        proposed_key="temp",
+        existing_keys=("temperature",),
+        threshold=0.9,
+    )
+
+    assert assessment.confirmation is None
+    assert assessment.diagnostics[0].code == "embedding_unavailable"
+    assert "injected timeout" in assessment.diagnostics[0].message
+
+
+def test_exact_existing_key_is_detected_without_provider_call() -> None:
+    provider = StaticProvider({})
+
+    assessment = assess_similarity(
+        provider,
+        subject="robot",
+        proposed_key="temperature",
+        existing_keys=("temperature",),
+        threshold=0.9,
+    )
+
+    assert assessment.confirmation is None
+    assert assessment.diagnostics[0].code == "exact_key_match"
+    assert not assessment.diagnostics[0].degraded
+    assert provider.calls == 0

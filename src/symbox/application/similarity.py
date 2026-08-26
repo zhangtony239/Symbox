@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from symbox.application.embedding_ports import EmbeddingProvider, cosine_similarity
+from symbox.application.embedding_ports import (
+    EmbeddingError,
+    EmbeddingProvider,
+    cosine_similarity,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +31,23 @@ class ConfirmationRequest:
     score: float
     threshold: float
     question: str
+
+
+@dataclass(frozen=True, slots=True)
+class SimilarityDiagnostic:
+    """Non-fatal machine-readable information about suggestion quality."""
+
+    code: str
+    message: str
+    degraded: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SimilarityAssessment:
+    """A confirmation decision plus diagnostics that never authorize a write."""
+
+    confirmation: ConfirmationRequest | None = None
+    diagnostics: tuple[SimilarityDiagnostic, ...] = ()
 
 
 def find_similar_key(
@@ -77,3 +98,56 @@ def similarity_confirmation(
             f"similar key {match.existing_key!r}?"
         ),
     )
+
+
+def assess_similarity(
+    provider: EmbeddingProvider | None,
+    *,
+    subject: str,
+    proposed_key: str,
+    existing_keys: tuple[str, ...],
+    threshold: float,
+    force: bool = False,
+) -> SimilarityAssessment:
+    """Use embeddings when available, otherwise continue with exact-name semantics."""
+    if proposed_key in existing_keys:
+        return SimilarityAssessment(
+            diagnostics=(
+                SimilarityDiagnostic(
+                    "exact_key_match",
+                    f"attribute key already exists exactly: {proposed_key}",
+                    False,
+                ),
+            )
+        )
+    if force:
+        return SimilarityAssessment()
+    if provider is None:
+        return SimilarityAssessment(
+            diagnostics=(
+                SimilarityDiagnostic(
+                    "embedding_not_configured",
+                    "similarity detection degraded to exact key matching",
+                    True,
+                ),
+            )
+        )
+    try:
+        confirmation = similarity_confirmation(
+            provider,
+            subject=subject,
+            proposed_key=proposed_key,
+            existing_keys=existing_keys,
+            threshold=threshold,
+        )
+    except EmbeddingError as error:
+        return SimilarityAssessment(
+            diagnostics=(
+                SimilarityDiagnostic(
+                    "embedding_unavailable",
+                    f"similarity detection degraded to exact key matching: {error}",
+                    True,
+                ),
+            )
+        )
+    return SimilarityAssessment(confirmation=confirmation)
