@@ -26,7 +26,7 @@
 - [x] 4.1 定义 TruthKernel 端口、三值枚举、节点/assumption/justification/解释数据结构
 - [x] 4.2 实现测试用 in-memory fake kernel 并完成端口 contract tests
 - [x] 4.3 调研并实现 `ltms` adapter 的节点注册、justification、撤回和传播映射
-- [ ] 4.4 实现候选 kernel clone；若库不支持安全 clone，则实现从领域快照确定性重建
+- [x] 4.4 实现候选 kernel clone；若库不支持安全 clone，则实现从领域快照确定性重建
 - [ ] 4.5 实现 justification 链解释与传播可达冲突报告
 - [ ] 4.6 添加跨对象/跨关系传播、撤回修正、sound 边界和原子冲突测试
 
