@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,3 +72,35 @@ class StateRepository:
         except OSError as error:
             raise StateFormatError(f"unable to read state file: {path}") from error
         return StateDocument.from_bytes(content)
+
+    def save(self, state: StateDocument) -> None:
+        """Publish a complete state document through a same-directory atomic replace."""
+        state_dir = self.scope.state_dir
+        try:
+            state_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise StateFormatError(f"unable to create state directory: {state_dir}") from error
+        if state_dir.is_symlink():
+            raise StateFormatError("state directory must not be a symlink")
+
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix=".state-",
+                suffix=".tmp",
+                dir=state_dir,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(state.to_bytes())
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.replace(temporary_path, self.scope.state_path)
+            temporary_path = None
+        except (OSError, StateFormatError) as error:
+            message = f"unable to atomically write state: {self.scope.state_path}"
+            raise StateFormatError(message) from error
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)

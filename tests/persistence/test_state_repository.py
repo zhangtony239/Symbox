@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -89,3 +90,59 @@ def test_invalid_scope_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ProjectScopeError):
         ProjectScope(missing)
+
+
+def test_save_atomically_replaces_committed_state(tmp_path: Path) -> None:
+    repository = StateRepository(ProjectScope(tmp_path))
+    repository.save(StateDocument(revision=1))
+
+    repository.save(StateDocument(revision=2, objects=({"name": "robot"},)))
+
+    assert repository.load().revision == 2
+    assert repository.scope.state_path.read_bytes() == repository.load().to_bytes()
+    assert list(repository.scope.state_dir.glob(".state-*.tmp")) == []
+
+
+def test_save_flushes_and_fsyncs_before_replace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = StateRepository(ProjectScope(tmp_path))
+    calls: list[str] = []
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def recording_fsync(file_descriptor: int) -> None:
+        calls.append("fsync")
+        real_fsync(file_descriptor)
+
+    def recording_replace(source: str | Path, destination: str | Path) -> None:
+        calls.append("replace")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(os, "fsync", recording_fsync)
+    monkeypatch.setattr(os, "replace", recording_replace)
+
+    repository.save(StateDocument(revision=1))
+
+    assert calls == ["fsync", "replace"]
+
+
+def test_failed_replace_preserves_old_state_and_removes_temporary_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = StateRepository(ProjectScope(tmp_path))
+    original = StateDocument(revision=1)
+    repository.save(original)
+
+    def failing_replace(source: str | Path, destination: str | Path) -> None:
+        raise OSError("injected replace failure")
+
+    monkeypatch.setattr(os, "replace", failing_replace)
+
+    with pytest.raises(StateFormatError, match="atomically write"):
+        repository.save(StateDocument(revision=2))
+
+    assert repository.load() == original
+    assert list(repository.scope.state_dir.glob(".state-*.tmp")) == []
