@@ -5,29 +5,36 @@ from __future__ import annotations
 import importlib.util
 import inspect
 import sys
-from collections.abc import Callable
-from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
+from symbox.application.binding_ports import BoundCallable, LoadedBinding
 from symbox.domain.models import BindingRef, DomainInvariantError
-
-BoundCallable = Callable[..., Any]
 
 
 class BindingLoadError(DomainInvariantError):
     """Raised when a persistent callable reference cannot be safely resolved."""
 
 
-@dataclass(frozen=True, slots=True)
-class LoadedBinding:
-    """A verified runtime callable and its persistence-safe reference."""
+class ProjectPythonBindingLoader:
+    """BindingLoader adapter for trusted Python files under a project root."""
 
-    reference: BindingRef
-    callable: BoundCallable
-    signature: inspect.Signature
+    def load(
+        self,
+        project_root: Path,
+        source_path: str,
+        qualified_name: str,
+        *,
+        is_verb: bool = False,
+    ) -> LoadedBinding:
+        return load_binding(
+            project_root,
+            source_path,
+            qualified_name,
+            is_verb=is_verb,
+        )
 
 
 def load_binding(
@@ -76,8 +83,9 @@ def load_binding(
             ) from error
     if not callable(target):
         raise BindingLoadError(f"binding target is not callable: {reference.qualified_name}")
-    signature = _validate_signature(target, reference.qualified_name)
-    return LoadedBinding(reference, target, signature)
+    callable_target = cast(BoundCallable, target)
+    signature = _validate_signature(callable_target, reference.qualified_name)
+    return LoadedBinding(reference, callable_target, signature)
 
 
 def _load_module(path: Path, digest: str) -> ModuleType:

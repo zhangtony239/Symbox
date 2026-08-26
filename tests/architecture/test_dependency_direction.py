@@ -14,7 +14,7 @@ ALLOWED_DEPENDENCIES = {
     "kernel": {"domain", "kernel"},
     "application": {"application", "domain", "kernel"},
     "persistence": {"domain", "kernel", "persistence"},
-    "integrations": {"domain", "kernel", "integrations"},
+    "integrations": {"application", "domain", "kernel", "integrations"},
     "cli": {"application", "cli", "domain"},
 }
 
