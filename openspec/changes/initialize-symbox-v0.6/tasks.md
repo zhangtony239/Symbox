@@ -10,7 +10,7 @@
 - [x] 2.1 实现 Subject、Verb、Adj、tag、Worry、BindingRef、SVK 领域模型及输入不变量
 - [x] 2.2 实现 `physical`、`abstract`、`meta` 分类和 Verb domain/range 类型校验
 - [x] 2.3 实现 NodeKey codec 的转义、解析和 round-trip 测试
-- [ ] 2.4 实现规范 JSON value codec 与 SVK SHA-256 身份生成，并覆盖参数顺序、默认值和碰撞测试
+- [x] 2.4 实现规范 JSON value codec 与 SVK SHA-256 身份生成，并覆盖参数顺序、默认值和碰撞测试
 - [ ] 2.5 实现显式/派生/assumption 来源模型及 Adj、tag 多来源撤回规则
 
 ## 3. 状态仓储与事务边界
