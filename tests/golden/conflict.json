@@ -1,0 +1,1 @@
+{"conflicts":[{"fact":"Worry:battery","justification":["Adj:robot:battery"]}],"data":null,"diagnostics":[{"category":"conflict","code":"truth_conflict","details":{},"message":"candidate state is inconsistent"}],"status":"conflict","transaction_id":"tx-123"}

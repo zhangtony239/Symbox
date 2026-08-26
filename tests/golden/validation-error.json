@@ -1,0 +1,1 @@
+{"conflicts":[],"data":null,"diagnostics":[{"category":"validation","code":"invalid_name","details":{"name":""},"message":"object name must not be empty"}],"status":"error","transaction_id":null}
