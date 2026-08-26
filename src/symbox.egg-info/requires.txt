@@ -1,3 +1,4 @@
 filelock>=3.16
+httpx>=0.28
 ltms>=0.1.0
 z3-solver>=5.0.0.0

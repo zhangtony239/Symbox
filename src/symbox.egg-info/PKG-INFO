@@ -6,6 +6,7 @@ Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: filelock>=3.16
+Requires-Dist: httpx>=0.28
 Requires-Dist: ltms>=0.1.0
 Requires-Dist: z3-solver>=5.0.0.0
 Dynamic: license-file
