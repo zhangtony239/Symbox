@@ -9,6 +9,7 @@ import pytest
 from symbox.domain.models import DomainInvariantError
 from symbox.domain.node_keys import NodeKey
 from symbox.kernel.fake import InMemoryTruthKernel
+from symbox.kernel.ltms_adapter import LTMSTruthKernel
 from symbox.kernel.port import (
     Assumption,
     Justification,
@@ -21,9 +22,9 @@ from symbox.kernel.port import (
 KernelFactory = Callable[[], TruthKernel]
 
 
-@pytest.fixture
-def kernel_factory() -> KernelFactory:
-    return InMemoryTruthKernel
+@pytest.fixture(params=[InMemoryTruthKernel, LTMSTruthKernel], ids=["fake", "ltms"])
+def kernel_factory(request: pytest.FixtureRequest) -> KernelFactory:
+    return request.param  # type: ignore[no-any-return]
 
 
 def test_adapter_satisfies_runtime_port(kernel_factory: KernelFactory) -> None:
