@@ -7,6 +7,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from filelock import FileLock, Timeout
+
 from symbox.persistence.state_format import StateDocument, StateFormatError
 
 _PROJECT_MARKERS = (".sbox", "pyproject.toml", ".git")
@@ -14,6 +16,10 @@ _PROJECT_MARKERS = (".sbox", "pyproject.toml", ".git")
 
 class ProjectScopeError(ValueError):
     """Raised when a safe project scope cannot be established."""
+
+
+class StateConflictError(StateFormatError):
+    """Raised when another writer committed after the candidate was created."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +46,10 @@ class ProjectScope:
     def backups_path(self) -> Path:
         return self.state_dir / "backups"
 
+    @property
+    def state_lock_path(self) -> Path:
+        return self.state_dir / "state.lock"
+
 
 def discover_project_scope(start: Path | None = None) -> ProjectScope:
     """Find the nearest project marker, falling back to the supplied directory."""
@@ -57,8 +67,9 @@ def discover_project_scope(start: Path | None = None) -> ProjectScope:
 class StateRepository:
     """Load committed state exclusively from one discovered project scope."""
 
-    def __init__(self, scope: ProjectScope) -> None:
+    def __init__(self, scope: ProjectScope, *, lock_timeout: float = 10.0) -> None:
         self.scope = scope
+        self.lock_timeout = lock_timeout
 
     def load(self) -> StateDocument:
         """Load and validate state; a project with no state starts empty."""
@@ -83,13 +94,29 @@ class StateRepository:
         if state_dir.is_symlink():
             raise StateFormatError("state directory must not be a symlink")
 
+        lock = FileLock(self.scope.state_lock_path, timeout=self.lock_timeout)
+        try:
+            with lock:
+                committed_revision = self.load().revision
+                expected_revision = committed_revision + 1
+                if state.revision != expected_revision:
+                    raise StateConflictError(
+                        f"state revision conflict: expected {expected_revision}, "
+                        f"received {state.revision}"
+                    )
+                self._write_atomically(state)
+        except Timeout as error:
+            raise StateConflictError("timed out waiting for the state write lock") from error
+
+    def _write_atomically(self, state: StateDocument) -> None:
+        """Write state while the caller holds the project write lock."""
         temporary_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 prefix=".state-",
                 suffix=".tmp",
-                dir=state_dir,
+                dir=self.scope.state_dir,
                 delete=False,
             ) as temporary:
                 temporary_path = Path(temporary.name)

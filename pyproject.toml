@@ -9,6 +9,7 @@ description = "An atomic symbolic state and truth-maintenance CLI for agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "filelock>=3.16",
     "ltms>=0.1.0",
     "z3-solver>=5.0.0.0",
 ]

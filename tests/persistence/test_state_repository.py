@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from symbox.persistence.state_format import StateDocument, StateFormatError
 from symbox.persistence.state_repository import (
     ProjectScope,
     ProjectScopeError,
+    StateConflictError,
     StateRepository,
     discover_project_scope,
 )
@@ -146,3 +148,37 @@ def test_failed_replace_preserves_old_state_and_removes_temporary_file(
 
     assert repository.load() == original
     assert list(repository.scope.state_dir.glob(".state-*.tmp")) == []
+
+
+def test_stale_candidate_revision_is_rejected_without_overwrite(tmp_path: Path) -> None:
+    repository = StateRepository(ProjectScope(tmp_path))
+    winner = StateDocument(revision=1, objects=({"name": "winner"},))
+    stale = StateDocument(revision=1, objects=({"name": "stale"},))
+    repository.save(winner)
+
+    with pytest.raises(StateConflictError, match="revision conflict"):
+        repository.save(stale)
+
+    assert repository.load() == winner
+
+
+def test_concurrent_writers_are_serialized_and_one_conflicts(tmp_path: Path) -> None:
+    scope = ProjectScope(tmp_path)
+    candidates = (
+        StateDocument(revision=1, objects=({"name": "first"},)),
+        StateDocument(revision=1, objects=({"name": "second"},)),
+    )
+
+    def save(candidate: StateDocument) -> str:
+        try:
+            StateRepository(scope).save(candidate)
+        except StateConflictError:
+            return "conflict"
+        return "committed"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(save, candidates))
+
+    assert sorted(results) == ["committed", "conflict"]
+    committed_objects = StateRepository(scope).load().objects
+    assert committed_objects == candidates[0].objects or committed_objects == candidates[1].objects
