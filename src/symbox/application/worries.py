@@ -197,36 +197,18 @@ def _evaluate_affected(
     loaded_bindings: Mapping[str, LoadedBinding],
 ) -> WorryState:
     candidate = _kernel(state).clone()
-    snapshots = _dependency_snapshots(attributes)
-    for worry in state.affected_by(changed):
-        entry = state.objects.binding_for(worry.name)
-        if entry is None:
-            continue
-        loaded = loaded_bindings.get(worry.name)
-        if loaded is None or loaded.reference != entry.reference:
-            raise BindingExecutionError(f"loaded binding unavailable for worry: {worry.name}")
-        subject_state = {
-            name: snapshots.get(name)
-            for name in worry.dependencies
-        }
-        for dependency in worry.dependencies:
-            key = NodeKey.parse(dependency).components[-1]
-            if key not in subject_state:
-                subject_state[key] = snapshots.get(dependency)
-        try:
-            healthy = loaded.callable(subject_state)
-        except Exception as error:
-            raise BindingExecutionError(
-                f"worry check raised for {worry.name}: {error}"
-            ) from error
-        if not isinstance(healthy, bool):
-            raise BindingExecutionError(f"worry check must return bool: {worry.name}")
-        _replace_health_support(candidate, worry.name, healthy)
+    pending = tuple(sorted(set(changed)))
+    while pending:
+        snapshots = _dependency_snapshots(attributes, candidate, state.worries)
+        for worry in state.affected_by(pending):
+            _evaluate_worry(state, worry, snapshots, loaded_bindings, candidate)
 
-    report = candidate.propagate()
-    if not report.consistent:
-        conflicts = ", ".join(conflict.node.encode() for conflict in report.conflicts)
-        raise DomainInvariantError(f"worry propagation conflict: {conflicts}")
+        report = candidate.propagate()
+        if not report.consistent:
+            conflicts = ", ".join(conflict.node.encode() for conflict in report.conflicts)
+            raise DomainInvariantError(f"worry propagation conflict: {conflicts}")
+        pending = tuple(key.encode() for key in report.changed)
+
     objects = BindingState(
         ObjectState(state.objects.objects.objects, candidate),
         state.objects.bindings,
@@ -234,11 +216,55 @@ def _evaluate_affected(
     return WorryState(objects, state.worries, candidate)
 
 
-def _dependency_snapshots(attributes: tuple[AttributeEntry, ...]) -> dict[str, Any]:
-    return {
+def _evaluate_worry(
+    state: WorryState,
+    worry: Worry,
+    snapshots: Mapping[str, Any],
+    loaded_bindings: Mapping[str, LoadedBinding],
+    candidate: TruthKernel,
+) -> None:
+    entry = state.objects.binding_for(worry.name)
+    if entry is None:
+        return
+    loaded = loaded_bindings.get(worry.name)
+    if loaded is None or loaded.reference != entry.reference:
+        raise BindingExecutionError(f"loaded binding unavailable for worry: {worry.name}")
+    subject_state = {name: snapshots.get(name) for name in worry.dependencies}
+    for dependency in worry.dependencies:
+        key = NodeKey.parse(dependency).components[-1]
+        subject_state.setdefault(key, snapshots.get(dependency))
+    try:
+        healthy = loaded.callable(subject_state)
+    except Exception as error:
+        raise BindingExecutionError(f"worry check raised for {worry.name}: {error}") from error
+    if not isinstance(healthy, bool):
+        raise BindingExecutionError(f"worry check must return bool: {worry.name}")
+    _replace_health_support(candidate, worry.name, healthy)
+
+
+def _dependency_snapshots(
+    attributes: tuple[AttributeEntry, ...],
+    kernel: TruthKernel,
+    worries: tuple[Worry, ...],
+) -> dict[str, Any]:
+    snapshots = {
         attribute_dependency(entry.subject, entry.fact.adj.key): entry.fact.adj.value
         for entry in attributes
     }
+    for dependency in {
+        dependency
+        for worry in worries
+        for dependency in worry.dependencies
+    }:
+        snapshots.setdefault(dependency, _truth_snapshot(kernel, dependency))
+    return snapshots
+
+
+def _truth_snapshot(kernel: TruthKernel, dependency: str) -> str | None:
+    try:
+        return kernel.truth(NodeKey.parse(dependency)).value
+    except DomainInvariantError:
+        return None
 
 
 def _replace_health_support(kernel: TruthKernel, worry_name: str, healthy: bool) -> None:

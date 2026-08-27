@@ -269,3 +269,54 @@ def test_unbind_withdraws_existing_health_support(tmp_path: Path) -> None:
 
     assert unbound.kernel is not None
     assert unbound.kernel.truth(NodeKey.worry("level-ok")) is TruthValue.UNKNOWN
+
+
+def test_propagation_tail_reevaluates_worry_affected_by_health_change(
+    tmp_path: Path,
+) -> None:
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "checks.py").write_text(
+        "def level_healthy(subject):\n"
+        "    return subject['level'] >= 10\n\n"
+        "def system_healthy(subject):\n"
+        "    return subject['level-ok'] == 'true'\n",
+        encoding="utf-8",
+    )
+    registered = create_worry(
+        _state("tank"),
+        "level-ok",
+        (attribute_dependency("tank", "level"),),
+    )
+    registered = create_worry(
+        registered,
+        "system-ok",
+        (NodeKey.worry("level-ok").encode(),),
+    )
+    bound, level_binding = bind_worry(
+        registered,
+        ProjectPythonBindingLoader(),
+        tmp_path,
+        "level-ok",
+        "rules/checks.py",
+        "level_healthy",
+    )
+    bound, system_binding = bind_worry(
+        bound,
+        ProjectPythonBindingLoader(),
+        tmp_path,
+        "system-ok",
+        "rules/checks.py",
+        "system_healthy",
+    )
+
+    updated = set_monitored_attributes(
+        WorryMonitoringState(bound),
+        "tank",
+        {"level": 12},
+        {"level-ok": level_binding, "system-ok": system_binding},
+    )
+
+    assert updated.kernel is not None
+    assert updated.kernel.truth(NodeKey.worry("level-ok")) is TruthValue.TRUE
+    assert updated.kernel.truth(NodeKey.worry("system-ok")) is TruthValue.TRUE
