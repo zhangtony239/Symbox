@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from symbox.cli.runtime import CommandRuntime
 from symbox.domain.models import DomainInvariantError
 from symbox.integrations.python_bindings import BindingLoadError
+from symbox.runtime import CommandRuntime
 
 
 def _write_rules(root: Path) -> None:

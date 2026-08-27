@@ -1,4 +1,4 @@
-"""Project-scoped command handlers over the canonical persisted state document."""
+"""Composition root for project-scoped canonical command handlers."""
 
 from __future__ import annotations
 
