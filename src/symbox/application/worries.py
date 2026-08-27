@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
+from symbox.application.attributes import AttributeEntry, AttributeState, set_attributes
 from symbox.application.binding_ports import BindingLoader, LoadedBinding
 from symbox.application.bindings import BindingState, bind_object, unbind_object
+from symbox.application.mutations import BindingExecutionError
 from symbox.application.objects import (
     ObjectAlreadyExistsError,
     ObjectNotFoundError,
@@ -16,7 +20,7 @@ from symbox.application.objects import (
 )
 from symbox.domain.models import DomainInvariantError, ObjectCategory, Worry
 from symbox.domain.node_keys import NodeKey
-from symbox.kernel.port import TruthKernel, TruthNode
+from symbox.kernel.port import Assumption, TruthKernel, TruthNode, TruthValue
 
 
 class WorryAlreadyExistsError(ObjectAlreadyExistsError):
@@ -66,6 +70,21 @@ class WorryState:
             for worry in self.worries
             if changed.intersection(worry.dependencies)
         )
+
+
+@dataclass(frozen=True, slots=True)
+class WorryMonitoringState:
+    """Attributes and Worry metadata sharing one authoritative candidate kernel."""
+
+    worries: WorryState
+    attributes: tuple[AttributeEntry, ...] = ()
+    kernel: TruthKernel | None = None
+
+    def __post_init__(self) -> None:
+        if self.kernel is None:
+            object.__setattr__(self, "kernel", _kernel(self.worries))
+        # Reuse AttributeState's ordering and referential-integrity invariants.
+        AttributeState(self.worries.objects, self.attributes, self.kernel)
 
 
 def create_worry(state: WorryState, name: str, dependencies: tuple[str, ...]) -> WorryState:
@@ -128,10 +147,120 @@ def bind_worry(
 
 
 def unbind_worry(state: WorryState, worry_name: str) -> WorryState:
-    """Remove a Worry binding while retaining its registered dependencies."""
+    """Remove a Worry binding and withdraw its health support."""
     _require_worry(state, worry_name)
     objects = unbind_object(state.objects, worry_name)
-    return WorryState(objects, state.worries, _kernel(state))
+    candidate = _kernel(state).clone()
+    _retract_health_support(candidate, worry_name)
+    report = candidate.propagate()
+    if not report.consistent:
+        raise DomainInvariantError(f"unbinding worry caused a conflict: {worry_name}")
+    synchronized = BindingState(ObjectState(objects.objects.objects, candidate), objects.bindings)
+    return WorryState(synchronized, state.worries, candidate)
+
+
+def set_monitored_attributes(
+    state: WorryMonitoringState,
+    subject: str,
+    values: dict[str, Any],
+    loaded_bindings: Mapping[str, LoadedBinding],
+) -> WorryMonitoringState:
+    """Set attributes and immediately evaluate affected bound Worries atomically."""
+    kernel = _monitoring_kernel(state)
+    object_state = ObjectState(state.worries.objects.objects.objects, kernel)
+    bindings = BindingState(object_state, state.worries.objects.bindings)
+    attributes = AttributeState(bindings, state.attributes, kernel)
+    candidate_attributes = set_attributes(attributes, subject, values)
+    changed = tuple(attribute_dependency(subject, key) for key in values)
+    candidate = _evaluate_affected(
+        WorryState(
+            candidate_attributes.objects,
+            state.worries.worries,
+            candidate_attributes.kernel,
+        ),
+        candidate_attributes.attributes,
+        changed,
+        loaded_bindings,
+    )
+    return WorryMonitoringState(candidate, candidate_attributes.attributes, _kernel(candidate))
+
+
+def attribute_dependency(subject: str, key: str) -> str:
+    """Return the canonical dependency identity for one monitored attribute."""
+    return NodeKey.adj(subject, key).encode()
+
+
+def _evaluate_affected(
+    state: WorryState,
+    attributes: tuple[AttributeEntry, ...],
+    changed: tuple[str, ...],
+    loaded_bindings: Mapping[str, LoadedBinding],
+) -> WorryState:
+    candidate = _kernel(state).clone()
+    snapshots = _dependency_snapshots(attributes)
+    for worry in state.affected_by(changed):
+        entry = state.objects.binding_for(worry.name)
+        if entry is None:
+            continue
+        loaded = loaded_bindings.get(worry.name)
+        if loaded is None or loaded.reference != entry.reference:
+            raise BindingExecutionError(f"loaded binding unavailable for worry: {worry.name}")
+        subject_state = {
+            name: snapshots.get(name)
+            for name in worry.dependencies
+        }
+        for dependency in worry.dependencies:
+            key = NodeKey.parse(dependency).components[-1]
+            if key not in subject_state:
+                subject_state[key] = snapshots.get(dependency)
+        try:
+            healthy = loaded.callable(subject_state)
+        except Exception as error:
+            raise BindingExecutionError(
+                f"worry check raised for {worry.name}: {error}"
+            ) from error
+        if not isinstance(healthy, bool):
+            raise BindingExecutionError(f"worry check must return bool: {worry.name}")
+        _replace_health_support(candidate, worry.name, healthy)
+
+    report = candidate.propagate()
+    if not report.consistent:
+        conflicts = ", ".join(conflict.node.encode() for conflict in report.conflicts)
+        raise DomainInvariantError(f"worry propagation conflict: {conflicts}")
+    objects = BindingState(
+        ObjectState(state.objects.objects.objects, candidate),
+        state.objects.bindings,
+    )
+    return WorryState(objects, state.worries, candidate)
+
+
+def _dependency_snapshots(attributes: tuple[AttributeEntry, ...]) -> dict[str, Any]:
+    return {
+        attribute_dependency(entry.subject, entry.fact.adj.key): entry.fact.adj.value
+        for entry in attributes
+    }
+
+
+def _replace_health_support(kernel: TruthKernel, worry_name: str, healthy: bool) -> None:
+    _retract_health_support(kernel, worry_name)
+    kernel.assert_assumption(
+        Assumption(
+            _health_assumption_id(worry_name),
+            NodeKey.worry(worry_name),
+            TruthValue.TRUE if healthy else TruthValue.FALSE,
+        )
+    )
+
+
+def _retract_health_support(kernel: TruthKernel, worry_name: str) -> None:
+    identifier = _health_assumption_id(worry_name)
+    explanation = kernel.explain(NodeKey.worry(worry_name))
+    if any(support.support_id == identifier for support in explanation.supports):
+        kernel.retract_assumption(identifier)
+
+
+def _health_assumption_id(worry_name: str) -> str:
+    return f"worry-health:{NodeKey.worry(worry_name).encode()}"
 
 
 def _require_worry(state: WorryState, name: str) -> Worry:
@@ -142,5 +271,10 @@ def _require_worry(state: WorryState, name: str) -> Worry:
 
 
 def _kernel(state: WorryState) -> TruthKernel:
+    assert state.kernel is not None
+    return state.kernel
+
+
+def _monitoring_kernel(state: WorryMonitoringState) -> TruthKernel:
     assert state.kernel is not None
     return state.kernel
