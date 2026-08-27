@@ -20,5 +20,5 @@
 ## 4. 验证与一致性检查
 
 - [x] 4.1 校验 Skill frontmatter、目录命名、description 触发语义、正文渐进披露和所有内部引用
-- [ ] 4.2 对照 v0.6 设计规范、agent-guidance 与 project-onboarding specs 审阅 Skill 和 README，确认未引入深层格术语、项目管理定位或绝对防幻觉承诺
+- [x] 4.2 对照 v0.6 设计规范、agent-guidance 与 project-onboarding specs 审阅 Skill 和 README，确认未引入深层格术语、项目管理定位或绝对防幻觉承诺
 - [ ] 4.3 执行 README 中的安装验证与最小示例，并运行现有自动化测试和严格 OpenSpec 校验，记录任何与本次纯文档变更无关的既有失败
