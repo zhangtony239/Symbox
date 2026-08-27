@@ -75,7 +75,7 @@
 
 ## 10. Git Backup 管理
 
-- [ ] 10.1 实现 `.sbox/backups/` bare Git 仓库初始化、项目隔离和锁
+- [x] 10.1 实现 `.sbox/backups/` bare Git 仓库初始化、项目隔离和锁
 - [ ] 10.2 实现 backup create，把规范状态写为 tree/commit 并返回稳定 commit id
 - [ ] 10.3 实现 backup log 的 note、时间、id 确定排序和 list 入口集成
 - [ ] 10.4 实现受管理 refs 与先全量验证后更新的原子批量 delete
