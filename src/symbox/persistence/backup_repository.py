@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from filelock import FileLock, Timeout
 
+from symbox.persistence.state_format import StateDocument
 from symbox.persistence.state_repository import ProjectScope
 
 
@@ -18,6 +22,23 @@ class BackupError(RuntimeError):
 
 class BackupConflictError(BackupError):
     """Raised when another backup operation holds the project lock."""
+
+
+@dataclass(frozen=True, slots=True)
+class BackupRecord:
+    """Stable public metadata for one managed backup commit."""
+
+    commit_id: str
+    note: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class GitCommandResult:
+    """Strictly decoded output from a binary-safe Git subprocess."""
+
+    stdout: str
+    stderr: str
 
 
 class GitBackupRepository:
@@ -41,6 +62,60 @@ class GitBackupRepository:
         """Idempotently initialize and validate the project-local bare repository."""
         with self.locked():
             self._ensure_initialized_unlocked()
+
+    def create(
+        self,
+        state: StateDocument,
+        note: str,
+        *,
+        created_at: datetime | None = None,
+    ) -> BackupRecord:
+        """Write canonical state as a tree and atomically publish its commit ref."""
+        normalized_note = note.strip()
+        if not normalized_note:
+            raise BackupError("backup note must not be empty")
+        if "\x00" in normalized_note:
+            raise BackupError("backup note must not contain NUL")
+        timestamp = created_at or datetime.now(UTC)
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise BackupError("backup created_at must be timezone-aware")
+        timestamp = timestamp.astimezone(UTC)
+
+        with self.locked():
+            self._ensure_initialized_unlocked()
+            blob = self._run(
+                "hash-object",
+                "-w",
+                "--stdin",
+                input_bytes=state.to_bytes(),
+            ).stdout.strip()
+            tree_entry = f"100644 blob {blob}\tstate.json\n".encode()
+            tree = self._run("mktree", input_bytes=tree_entry).stdout.strip()
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "GIT_AUTHOR_NAME": "Symbox",
+                    "GIT_AUTHOR_EMAIL": "symbox@localhost",
+                    "GIT_COMMITTER_NAME": "Symbox",
+                    "GIT_COMMITTER_EMAIL": "symbox@localhost",
+                    "GIT_AUTHOR_DATE": timestamp.isoformat(),
+                    "GIT_COMMITTER_DATE": timestamp.isoformat(),
+                }
+            )
+            commit_id = self._run(
+                "commit-tree",
+                tree,
+                "-m",
+                normalized_note,
+                environment=environment,
+            ).stdout.strip()
+            managed_ref = f"refs/symbox/backups/{commit_id}"
+            existing = self._try_resolve_ref(managed_ref)
+            if existing is None:
+                self._run("update-ref", managed_ref, commit_id, "0" * 40)
+            elif existing != commit_id:
+                raise BackupConflictError("managed backup ref identifies a different commit")
+        return BackupRecord(commit_id, normalized_note, timestamp)
 
     @contextmanager
     def locked(self) -> Iterator[None]:
@@ -71,30 +146,38 @@ class GitBackupRepository:
         if result.stdout.strip() != "true":
             raise BackupError("backup repository is not bare")
 
+    def _try_resolve_ref(self, reference: str) -> str | None:
+        try:
+            return self._run("rev-parse", "--verify", reference).stdout.strip()
+        except BackupError:
+            return None
+
     def _run(
         self,
         *arguments: str,
         input_bytes: bytes | None = None,
         use_git_dir: bool = True,
         environment: dict[str, str] | None = None,
-    ) -> subprocess.CompletedProcess[str]:
+    ) -> GitCommandResult:
         command = ["git"]
         if use_git_dir:
             command.append(f"--git-dir={self.git_dir}")
         command.extend(arguments)
         try:
-            return subprocess.run(
+            completed = subprocess.run(
                 command,
-                input=input_bytes.decode("utf-8") if input_bytes is not None else None,
+                input=input_bytes,
                 capture_output=True,
                 check=True,
-                encoding="utf-8",
-                errors="strict",
                 env=environment,
+            )
+            return GitCommandResult(
+                completed.stdout.decode("utf-8", errors="strict"),
+                completed.stderr.decode("utf-8", errors="strict"),
             )
         except (OSError, UnicodeError, subprocess.CalledProcessError) as error:
             stderr = (
-                error.stderr.strip()
+                error.stderr.decode("utf-8", errors="replace").strip()
                 if isinstance(error, subprocess.CalledProcessError)
                 else ""
             )

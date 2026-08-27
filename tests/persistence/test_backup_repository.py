@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -10,8 +11,10 @@ from filelock import FileLock
 
 from symbox.persistence.backup_repository import (
     BackupConflictError,
+    BackupError,
     GitBackupRepository,
 )
+from symbox.persistence.state_format import StateDocument
 from symbox.persistence.state_repository import ProjectScope
 
 
@@ -58,3 +61,46 @@ def test_backup_lock_conflict_is_project_local_and_diagnostic(tmp_path: Path) ->
 
     with external_lock, pytest.raises(BackupConflictError, match="backup lock"):
         repository.ensure_initialized()
+
+
+def test_create_writes_canonical_state_tree_and_returns_full_stable_commit_id(
+    tmp_path: Path,
+) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+    state = StateDocument(revision=3, objects=({"name": "robot"},))
+    created_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+
+    first = repository.create(state, "before experiment", created_at=created_at)
+    second = repository.create(state, "before experiment", created_at=created_at)
+
+    assert first == second
+    assert len(first.commit_id) == 40
+    assert first.note == "before experiment"
+    assert first.created_at == created_at
+    content = subprocess.run(
+        ["git", f"--git-dir={repository.git_dir}", "show", f"{first.commit_id}:state.json"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert content == state.to_bytes()
+    resolved = subprocess.run(
+        [
+            "git",
+            f"--git-dir={repository.git_dir}",
+            "rev-parse",
+            f"refs/symbox/backups/{first.commit_id}",
+        ],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    assert resolved == first.commit_id
+
+
+def test_create_rejects_empty_note_without_initializing_repository(tmp_path: Path) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+
+    with pytest.raises(BackupError, match="note must not be empty"):
+        repository.create(StateDocument(), "   ")
+
+    assert not repository.git_dir.exists()
