@@ -85,7 +85,7 @@
 ## 11. 集成验证与项目文档
 
 - [x] 11.1 为 create/delete/bind/unbind/set/unset/now/list/backup 全命令树添加端到端 subprocess 测试
-- [ ] 11.2 添加故障注入测试，覆盖解析、binding、kernel、embedding、持久化和 Git 各阶段失败
+- [x] 11.2 添加故障注入测试，覆盖解析、binding、kernel、embedding、持久化和 Git 各阶段失败
 - [ ] 11.3 验证每个写命令成功只提交一次、失败保持内存与磁盘状态不变
 - [ ] 11.4 更新 README，记录 v0.6 CLI、SVK 示例、Worry 极性、配置、状态目录和当前推理边界
 - [ ] 11.5 运行 formatter、linter、type checker、完整测试与 OpenSpec strict validation，并修复全部问题
