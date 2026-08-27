@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -199,3 +200,102 @@ def test_rollback_unknown_id_preserves_current_state_bytes(tmp_path: Path) -> No
 
     assert scope.state_path.read_bytes() == before
     assert states.load() == current
+
+
+def test_rollback_rejects_corrupt_snapshot_before_touching_current_state(
+    tmp_path: Path,
+) -> None:
+    scope = ProjectScope(tmp_path)
+    states = StateRepository(scope)
+    backups = GitBackupRepository(scope)
+    current = StateDocument(revision=1, objects=({"name": "current"},))
+    states.save(current)
+    backups.ensure_initialized()
+    blob = subprocess.run(
+        ["git", f"--git-dir={backups.git_dir}", "hash-object", "-w", "--stdin"],
+        input=b"not-json",
+        capture_output=True,
+        check=True,
+    ).stdout.decode().strip()
+    tree = subprocess.run(
+        ["git", f"--git-dir={backups.git_dir}", "mktree"],
+        input=f"100644 blob {blob}\tstate.json\n".encode(),
+        capture_output=True,
+        check=True,
+    ).stdout.decode().strip()
+    environment = {
+        "GIT_AUTHOR_NAME": "Symbox",
+        "GIT_AUTHOR_EMAIL": "symbox@localhost",
+        "GIT_COMMITTER_NAME": "Symbox",
+        "GIT_COMMITTER_EMAIL": "symbox@localhost",
+    }
+    commit_id = subprocess.run(
+        ["git", f"--git-dir={backups.git_dir}", "commit-tree", tree, "-m", "corrupt"],
+        capture_output=True,
+        check=True,
+        text=True,
+        env=environment,
+    ).stdout.strip()
+    subprocess.run(
+        [
+            "git",
+            f"--git-dir={backups.git_dir}",
+            "update-ref",
+            f"refs/symbox/backups/{commit_id}",
+            commit_id,
+        ],
+        capture_output=True,
+        check=True,
+    )
+    before = scope.state_path.read_bytes()
+
+    with pytest.raises(BackupError, match="snapshot is invalid"):
+        backups.rollback(commit_id, states)
+
+    assert scope.state_path.read_bytes() == before
+    assert states.load() == current
+
+
+def test_concurrent_create_serializes_ref_updates_without_losing_backups(
+    tmp_path: Path,
+) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = (
+            executor.submit(repository.create, StateDocument(revision=1), "first"),
+            executor.submit(repository.create, StateDocument(revision=2), "second"),
+        )
+        created = tuple(future.result() for future in futures)
+
+    assert {record.commit_id for record in repository.list_backups()} == {
+        record.commit_id for record in created
+    }
+
+
+def test_backup_content_and_list_exclude_environment_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "sk-never-backup-this"
+    monkeypatch.setenv("SBOX_EMBEDDING_API_KEY", secret)
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+
+    record = repository.create(StateDocument(revision=1), "safe note")
+
+    content = subprocess.run(
+        ["git", f"--git-dir={repository.git_dir}", "show", f"{record.commit_id}:state.json"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    commit = subprocess.run(
+        ["git", f"--git-dir={repository.git_dir}", "cat-file", "-p", record.commit_id],
+        capture_output=True,
+        check=True,
+    ).stdout
+    metadata = repr(repository.list_backups()).encode()
+
+    assert secret.encode() not in content
+    assert secret.encode() not in commit
+    assert secret.encode() not in metadata
+    assert b"SBOX_EMBEDDING_API_KEY" not in content
