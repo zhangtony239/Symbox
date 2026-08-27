@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+import pytest
+
 from symbox.application.attributes import AttributeState, set_attributes
 from symbox.application.bindings import BindingEntry, BindingState
-from symbox.application.objects import ObjectState, create_object
+from symbox.application.objects import ObjectNotFoundError, ObjectState, create_object
 from symbox.application.queries import (
     QueryState,
     get_object_detail,
@@ -137,3 +139,13 @@ def test_object_detail_projects_sources_binding_relations_truth_and_justificatio
         "level-implies-ready"
     )
     assert truths[relation_key.encode()].supports[0].support_id == "relation-explicit"
+
+
+def test_object_detail_rejects_unknown_name_without_mutating_query_state() -> None:
+    state = QueryState(_objects())
+    before = list_objects(state)
+
+    with pytest.raises(ObjectNotFoundError, match="unknown object: missing"):
+        get_object_detail(state, "missing")
+
+    assert list_objects(state) == before
