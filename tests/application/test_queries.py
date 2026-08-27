@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from symbox.application.attributes import AttributeState, set_attributes
 from symbox.application.bindings import BindingEntry, BindingState
 from symbox.application.objects import ObjectState, create_object
-from symbox.application.queries import QueryState, list_objects, list_verbs
-from symbox.domain.models import BindingRef, ObjectCategory
+from symbox.application.queries import (
+    QueryState,
+    get_object_detail,
+    list_objects,
+    list_verbs,
+)
+from symbox.application.relations import RelationFact
+from symbox.application.tags import add_explicit_tag, sync_adj_tags
+from symbox.domain.models import SVK, BindingRef, ObjectCategory
+from symbox.domain.node_keys import NodeKey
 from symbox.kernel.fake import InMemoryTruthKernel
+from symbox.kernel.port import Assumption, Justification, Premise, TruthNode, TruthValue
 
 
 def _objects() -> BindingState:
@@ -70,3 +80,60 @@ def test_list_verbs_returns_empty_collection_when_no_verb_is_marked() -> None:
     state = BindingState(objects.objects, (BindingEntry("alpha", plain),))
 
     assert list_verbs(QueryState(state)) == ()
+
+
+def test_object_detail_projects_sources_binding_relations_truth_and_justification() -> None:
+    objects = _objects()
+    attribute_state = set_attributes(AttributeState(objects), "zeta", {"level": 12})
+    tags = add_explicit_tag((), "zeta", "ready")
+    tags = sync_adj_tags(tags, "zeta", "level", (), ("ready",))
+    relation_key = NodeKey.svk("zeta", "alpha", "c" * 64)
+    relation = RelationFact(
+        SVK("zeta", "alpha", ("monitor",), (("target", "alpha"),)),
+        relation_key.encode(),
+    )
+    kernel = attribute_state.kernel
+    assert kernel is not None
+    kernel.register_node(TruthNode(NodeKey.tag("zeta", "ready")))
+    kernel.register_node(TruthNode(relation_key))
+    kernel.add_justification(
+        Justification(
+            "level-implies-ready",
+            NodeKey.tag("zeta", "ready"),
+            (Premise(NodeKey.adj("zeta", "level")),),
+        )
+    )
+    kernel.assert_assumption(Assumption("relation-explicit", relation_key))
+    kernel.propagate()
+    state = QueryState(
+        objects,
+        attribute_state.attributes,
+        tags,
+        (relation,),
+        kernel,
+    )
+
+    detail = get_object_detail(state, "zeta")
+
+    assert detail.name == "zeta"
+    assert detail.category is ObjectCategory.PHYSICAL
+    assert detail.is_verb
+    assert detail.binding is not None
+    assert detail.binding.source_path == "rules/checks.py"
+    assert detail.attributes[0].key == "level"
+    assert detail.attributes[0].value == 12
+    assert detail.attributes[0].sources[0].kind == "explicit"
+    assert detail.tags[0].name == "ready"
+    assert tuple(source.kind for source in detail.tags[0].sources) == (
+        "derived",
+        "explicit",
+    )
+    assert detail.relations[0].node_key == relation_key.encode()
+    assert detail.relations[0].args == ("monitor",)
+    truths = {truth.node_key: truth for truth in detail.truths}
+    assert truths[NodeKey.subject("zeta").encode()].value is TruthValue.TRUE
+    assert truths[NodeKey.adj("zeta", "level").encode()].value is TruthValue.TRUE
+    assert truths[NodeKey.tag("zeta", "ready").encode()].supports[0].support_id == (
+        "level-implies-ready"
+    )
+    assert truths[relation_key.encode()].supports[0].support_id == "relation-explicit"
