@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime
+from typing import Any, Protocol
 
 from symbox.application.attributes import AttributeEntry
 from symbox.application.bindings import BindingState
@@ -130,6 +132,23 @@ class ObjectDetail:
     truths: tuple[TruthSummary, ...]
 
 
+class BackupMetadata(Protocol):
+    """Minimal metadata boundary supplied by a backup infrastructure adapter."""
+
+    commit_id: str
+    note: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class BackupSummary:
+    """Stable machine-readable backup list entry."""
+
+    commit_id: str
+    note: str
+    created_at: str
+
+
 def list_objects(state: QueryState) -> tuple[ObjectSummary, ...]:
     """Return all object handles in deterministic name order."""
     return tuple(
@@ -159,6 +178,14 @@ def list_verbs(state: QueryState) -> tuple[VerbSummary, ...]:
         )
         for entry in state.objects.bindings
         if entry.reference.is_verb
+    )
+
+
+def list_backups(records: Iterable[BackupMetadata]) -> tuple[BackupSummary, ...]:
+    """Project backup metadata into the unified list-query representation."""
+    return tuple(
+        BackupSummary(record.commit_id, record.note, record.created_at.isoformat())
+        for record in records
     )
 
 

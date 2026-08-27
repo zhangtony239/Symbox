@@ -12,6 +12,7 @@ from filelock import FileLock
 from symbox.persistence.backup_repository import (
     BackupConflictError,
     BackupError,
+    BackupNotFoundError,
     GitBackupRepository,
 )
 from symbox.persistence.state_format import StateDocument
@@ -104,3 +105,63 @@ def test_create_rejects_empty_note_without_initializing_repository(tmp_path: Pat
         repository.create(StateDocument(), "   ")
 
     assert not repository.git_dir.exists()
+
+
+def test_log_returns_managed_metadata_newest_first_with_id_tiebreaker(
+    tmp_path: Path,
+) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+    older = repository.create(
+        StateDocument(revision=1),
+        "older",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    newer_a = repository.create(
+        StateDocument(revision=2),
+        "newer a",
+        created_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+    newer_b = repository.create(
+        StateDocument(revision=3),
+        "newer b",
+        created_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+
+    records = repository.list_backups()
+
+    assert records == tuple(
+        sorted(
+            (newer_a, newer_b),
+            key=lambda record: record.commit_id,
+        )
+    ) + (older,)
+
+
+def test_log_of_uninitialized_project_is_empty_and_read_only(tmp_path: Path) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+
+    assert repository.list_backups() == ()
+    assert not repository.scope.state_dir.exists()
+
+
+def test_delete_removes_all_requested_managed_refs_atomically(tmp_path: Path) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+    first = repository.create(StateDocument(revision=1), "first")
+    second = repository.create(StateDocument(revision=2), "second")
+    retained = repository.create(StateDocument(revision=3), "retained")
+
+    repository.delete((first.commit_id, second.commit_id))
+
+    assert repository.list_backups() == (retained,)
+
+
+def test_delete_with_unknown_id_preserves_every_requested_backup(tmp_path: Path) -> None:
+    repository = GitBackupRepository(ProjectScope(tmp_path))
+    first = repository.create(StateDocument(revision=1), "first")
+    second = repository.create(StateDocument(revision=2), "second")
+    before = repository.list_backups()
+
+    with pytest.raises(BackupNotFoundError, match="unknown backup ids"):
+        repository.delete((first.commit_id, "f" * 40, second.commit_id))
+
+    assert repository.list_backups() == before

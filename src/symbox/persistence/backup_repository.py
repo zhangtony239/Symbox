@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,6 +23,10 @@ class BackupError(RuntimeError):
 
 class BackupConflictError(BackupError):
     """Raised when another backup operation holds the project lock."""
+
+
+class BackupNotFoundError(BackupError):
+    """Raised when a managed backup identifier does not exist."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +84,7 @@ class GitBackupRepository:
         timestamp = created_at or datetime.now(UTC)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise BackupError("backup created_at must be timezone-aware")
-        timestamp = timestamp.astimezone(UTC)
+        timestamp = timestamp.astimezone(UTC).replace(microsecond=0)
 
         with self.locked():
             self._ensure_initialized_unlocked()
@@ -117,6 +122,82 @@ class GitBackupRepository:
                 raise BackupConflictError("managed backup ref identifies a different commit")
         return BackupRecord(commit_id, normalized_note, timestamp)
 
+    def list_backups(self) -> tuple[BackupRecord, ...]:
+        """List managed backups newest-first without creating storage on read."""
+        if not self.git_dir.exists():
+            return ()
+        with self.locked():
+            self._ensure_initialized_unlocked()
+            output = self._run(
+                "for-each-ref",
+                "--format=%(objectname)%00%(creatordate:iso-strict)%00%(contents)%00",
+                "refs/symbox/backups/",
+            ).stdout
+        fields = output.split("\x00")
+        records: list[BackupRecord] = []
+        for offset in range(0, len(fields) - 1, 3):
+            commit_id = fields[offset].strip()
+            if not commit_id:
+                continue
+            raw_timestamp = fields[offset + 1].strip()
+            note = fields[offset + 2].strip()
+            try:
+                created_at = datetime.fromisoformat(raw_timestamp).astimezone(UTC)
+            except ValueError as error:
+                raise BackupError(
+                    f"backup commit has invalid timestamp: {commit_id}"
+                ) from error
+            records.append(BackupRecord(commit_id, note, created_at))
+        return tuple(
+            sorted(
+                records,
+                key=lambda record: (
+                    -record.created_at.timestamp(),
+                    record.commit_id,
+                ),
+            )
+        )
+
+    def delete(self, commit_ids: tuple[str, ...]) -> None:
+        """Validate every target, then delete all managed refs in one Git transaction."""
+        normalized = tuple(identifier.strip().lower() for identifier in commit_ids)
+        if not normalized:
+            raise BackupError("at least one backup id is required")
+        if len(normalized) != len(set(normalized)):
+            raise BackupError("backup ids must be unique")
+        invalid = tuple(
+            identifier
+            for identifier in normalized
+            if not re.fullmatch(r"[0-9a-f]{40}", identifier)
+        )
+        if invalid:
+            raise BackupError(f"backup ids must be full commit ids: {invalid}")
+
+        with self.locked():
+            if not self.git_dir.exists():
+                raise BackupNotFoundError(f"unknown backup ids: {normalized}")
+            self._ensure_initialized_unlocked()
+            resolved: list[tuple[str, str]] = []
+            unknown: list[str] = []
+            for commit_id in normalized:
+                reference = self._managed_ref(commit_id)
+                current = self._try_resolve_ref(reference)
+                if current != commit_id:
+                    unknown.append(commit_id)
+                else:
+                    resolved.append((reference, current))
+            if unknown:
+                raise BackupNotFoundError(f"unknown backup ids: {tuple(unknown)}")
+
+            commands = ["start"]
+            commands.extend(
+                f"delete {reference} {current}"
+                for reference, current in resolved
+            )
+            commands.extend(("prepare", "commit"))
+            payload = ("\n".join(commands) + "\n").encode()
+            self._run("update-ref", "--stdin", input_bytes=payload)
+
     @contextmanager
     def locked(self) -> Iterator[None]:
         """Serialize all ref and object operations for this project."""
@@ -151,6 +232,10 @@ class GitBackupRepository:
             return self._run("rev-parse", "--verify", reference).stdout.strip()
         except BackupError:
             return None
+
+    @staticmethod
+    def _managed_ref(commit_id: str) -> str:
+        return f"refs/symbox/backups/{commit_id}"
 
     def _run(
         self,

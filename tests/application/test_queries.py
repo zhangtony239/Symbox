@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from symbox.application.objects import ObjectNotFoundError, ObjectState, create_
 from symbox.application.queries import (
     QueryState,
     get_object_detail,
+    list_backups,
     list_objects,
     list_verbs,
 )
@@ -200,3 +202,32 @@ def test_repeated_queries_do_not_write_state_or_execute_binding(tmp_path: Path) 
     assert scope.state_path.read_bytes() == before_bytes
     assert scope.state_path.stat().st_mtime_ns == before_mtime
     assert not marker.exists()
+
+
+@dataclass(frozen=True)
+class _Backup:
+    commit_id: str
+    note: str
+    created_at: datetime
+
+
+def test_list_backups_projects_repository_metadata_without_reordering() -> None:
+    records = (
+        _Backup("b" * 40, "newest", datetime(2026, 2, 1, tzinfo=UTC)),
+        _Backup("a" * 40, "older", datetime(2026, 1, 1, tzinfo=UTC)),
+    )
+
+    summaries = list_backups(records)
+
+    assert tuple(asdict(summary) for summary in summaries) == (
+        {
+            "commit_id": "b" * 40,
+            "note": "newest",
+            "created_at": "2026-02-01T00:00:00+00:00",
+        },
+        {
+            "commit_id": "a" * 40,
+            "note": "older",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        },
+    )
