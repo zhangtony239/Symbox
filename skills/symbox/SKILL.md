@@ -129,4 +129,4 @@ Treat both the JSON `status` and the process exit code as signals. Confirmation 
 - When information is missing, preserve the uncertainty, gather evidence, or revise the model before retrying.
 - When your cognition changes, update Symbox rather than continuing from stale symbolic state.
 
-Use `sbox --help` and subcommand help as the source of truth for exact installed CLI syntax. Consult the repository's `symbox-design-spec-v0.6.md` for the deeper SVK and truth-maintenance design boundaries.
+Use `sbox --help` and subcommand help as the source of truth for exact installed CLI syntax. This Skill is self-contained: follow the mental model, workflow, result handling, and safeguards above without depending on separate design documents.
