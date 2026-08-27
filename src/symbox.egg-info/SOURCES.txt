@@ -17,9 +17,17 @@ src/symbox/application/errors.py
 src/symbox/application/mutations.py
 src/symbox/application/objects.py
 src/symbox/application/relation_guards.py
+src/symbox/application/relations.py
+src/symbox/application/signature_binding.py
+src/symbox/application/similarity.py
+src/symbox/application/tags.py
 src/symbox/application/transactions.py
+src/symbox/application/verb_checks.py
+src/symbox/application/worries.py
 src/symbox/cli/__init__.py
+src/symbox/cli/confirmations.py
 src/symbox/cli/main.py
+src/symbox/cli/now_parser.py
 src/symbox/cli/results.py
 src/symbox/domain/__init__.py
 src/symbox/domain/models.py
