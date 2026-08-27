@@ -67,7 +67,7 @@
 
 ## 9. 查询接口
 
-- [ ] 9.1 实现 `list objects` 的确定排序和对象分类/Verb 摘要
+- [x] 9.1 实现 `list objects` 的确定排序和对象分类/Verb 摘要
 - [ ] 9.2 实现 `list verbs` 与绑定摘要过滤
 - [ ] 9.3 实现 `list <object>` 的 Adj/tag 来源、绑定、关系、真值与 justification 摘要
 - [ ] 9.4 实现未知对象错误及空集合成功语义
