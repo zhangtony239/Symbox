@@ -74,11 +74,7 @@ class WorryState:
     def affected_by(self, dependencies: tuple[str, ...]) -> tuple[Worry, ...]:
         """Return monitors subscribed to any changed dependency in stable order."""
         changed = frozenset(dependencies)
-        return tuple(
-            worry
-            for worry in self.worries
-            if changed.intersection(worry.dependencies)
-        )
+        return tuple(worry for worry in self.worries if changed.intersection(worry.dependencies))
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,11 +285,7 @@ def _dependency_snapshots(
         attribute_dependency(entry.subject, entry.fact.adj.key): entry.fact.adj.value
         for entry in attributes
     }
-    for dependency in {
-        dependency
-        for worry in worries
-        for dependency in worry.dependencies
-    }:
+    for dependency in {dependency for worry in worries for dependency in worry.dependencies}:
         snapshots.setdefault(dependency, _truth_snapshot(kernel, dependency))
     return snapshots
 
@@ -311,8 +303,7 @@ def _state_signature(
     pending: tuple[str, ...],
 ) -> str:
     truths = ",".join(
-        f"{worry.name}={kernel.truth(NodeKey.worry(worry.name)).value}"
-        for worry in worries
+        f"{worry.name}={kernel.truth(NodeKey.worry(worry.name)).value}" for worry in worries
     )
     return f"truths[{truths}];pending[{','.join(sorted(pending))}]"
 

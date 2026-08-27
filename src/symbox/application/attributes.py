@@ -90,9 +90,7 @@ def set_attributes(
         if canonical_json_bytes(value)
     }
     candidate = _kernel(state).clone()
-    entries = {
-        (entry.subject, entry.fact.adj.key): entry for entry in state.attributes
-    }
+    entries = {(entry.subject, entry.fact.adj.key): entry for entry in state.attributes}
     for key, adj in new_facts.items():
         identity = subject, key
         source = FactSource(SourceKind.EXPLICIT, _source_id(subject, key))

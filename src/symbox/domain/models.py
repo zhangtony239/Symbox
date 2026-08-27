@@ -109,9 +109,7 @@ class Adj:
         object.__setattr__(self, "key", _required_name(self.key, "adj key"))
         if self.recorded_at.tzinfo is None or self.recorded_at.utcoffset() is None:
             raise DomainInvariantError("adj recorded_at must be timezone-aware")
-        normalized_tags = tuple(
-            _required_name(tag, "implied tag") for tag in self.implies_tags
-        )
+        normalized_tags = tuple(_required_name(tag, "implied tag") for tag in self.implies_tags)
         if len(normalized_tags) != len(set(normalized_tags)):
             raise DomainInvariantError("adj implied tags must be unique")
         object.__setattr__(self, "implies_tags", normalized_tags)

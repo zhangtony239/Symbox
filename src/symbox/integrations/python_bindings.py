@@ -78,9 +78,7 @@ def load_binding(
         try:
             target = getattr(target, component)
         except AttributeError as error:
-            raise BindingLoadError(
-                f"binding name not found: {reference.qualified_name}"
-            ) from error
+            raise BindingLoadError(f"binding name not found: {reference.qualified_name}") from error
     if not callable(target):
         raise BindingLoadError(f"binding target is not callable: {reference.qualified_name}")
     callable_target = cast(BoundCallable, target)

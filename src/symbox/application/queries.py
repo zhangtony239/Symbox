@@ -163,9 +163,7 @@ def list_objects(state: QueryState) -> tuple[ObjectSummary, ...]:
 
 def list_verbs(state: QueryState) -> tuple[VerbSummary, ...]:
     """Return only explicitly marked Verb objects without loading their callables."""
-    categories = {
-        subject.name: subject.category for subject in state.objects.objects.objects
-    }
+    categories = {subject.name: subject.category for subject in state.objects.objects.objects}
     return tuple(
         VerbSummary(
             name=entry.object_name,
@@ -224,9 +222,7 @@ def get_object_detail(state: QueryState, name: str) -> ObjectDetail:
         if entry.subject == name
     )
     relations = tuple(
-        _relation_summary(fact)
-        for fact in state.relations
-        if _relation_involves(fact, name)
+        _relation_summary(fact) for fact in state.relations if _relation_involves(fact, name)
     )
     truth_keys = {
         NodeKey.subject(name),
@@ -235,10 +231,7 @@ def get_object_detail(state: QueryState, name: str) -> ObjectDetail:
         *(NodeKey.parse(item.node_key) for item in relations),
     }
     kernel = _kernel(state)
-    truths = tuple(
-        _truth_summary(kernel, key)
-        for key in sorted(truth_keys, key=NodeKey.encode)
-    )
+    truths = tuple(_truth_summary(kernel, key) for key in sorted(truth_keys, key=NodeKey.encode))
     return ObjectDetail(
         name=subject.name,
         category=subject.category,

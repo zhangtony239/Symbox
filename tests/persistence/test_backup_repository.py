@@ -211,18 +211,26 @@ def test_rollback_rejects_corrupt_snapshot_before_touching_current_state(
     current = StateDocument(revision=1, objects=({"name": "current"},))
     states.save(current)
     backups.ensure_initialized()
-    blob = subprocess.run(
-        ["git", f"--git-dir={backups.git_dir}", "hash-object", "-w", "--stdin"],
-        input=b"not-json",
-        capture_output=True,
-        check=True,
-    ).stdout.decode().strip()
-    tree = subprocess.run(
-        ["git", f"--git-dir={backups.git_dir}", "mktree"],
-        input=f"100644 blob {blob}\tstate.json\n".encode(),
-        capture_output=True,
-        check=True,
-    ).stdout.decode().strip()
+    blob = (
+        subprocess.run(
+            ["git", f"--git-dir={backups.git_dir}", "hash-object", "-w", "--stdin"],
+            input=b"not-json",
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
+    tree = (
+        subprocess.run(
+            ["git", f"--git-dir={backups.git_dir}", "mktree"],
+            input=f"100644 blob {blob}\tstate.json\n".encode(),
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
     environment = {
         "GIT_AUTHOR_NAME": "Symbox",
         "GIT_AUTHOR_EMAIL": "symbox@localhost",

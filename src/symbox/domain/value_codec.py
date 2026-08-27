@@ -35,9 +35,7 @@ def encode_value(value: Any) -> CanonicalValue:
             raise DomainInvariantError("canonical JSON object keys must be strings")
         return {
             "type": "object",
-            "items": [
-                {"key": key, "value": encode_value(value[key])} for key in sorted(value)
-            ],
+            "items": [{"key": key, "value": encode_value(value[key])} for key in sorted(value)],
         }
     raise DomainInvariantError(f"unsupported canonical JSON value: {type(value).__name__}")
 

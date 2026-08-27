@@ -102,9 +102,7 @@ class CommandRuntime:
         from symbox.application.attributes import parse_assignments
 
         values = parse_assignments(assignments)
-        records = {
-            (record.get("subject"), record.get("key")): record for record in state.adj_facts
-        }
+        records = {(record.get("subject"), record.get("key")): record for record in state.adj_facts}
         for key, value in values.items():
             records[name, key] = {
                 "subject": name,
@@ -126,8 +124,7 @@ class CommandRuntime:
         adj_facts = tuple(
             record
             for record in state.adj_facts
-            if (record.get("subject"), record.get("key"))
-            not in {(name, key) for key in normalized}
+            if (record.get("subject"), record.get("key")) not in {(name, key) for key in normalized}
         )
         self._save(replace(state, adj_facts=adj_facts))
         return {"subject": name, "keys": normalized}
@@ -189,9 +186,7 @@ class CommandRuntime:
         state = self.states.load()
         if target == "objects":
             verbs = {
-                record["object_name"]
-                for record in state.bindings
-                if record.get("is_verb") is True
+                record["object_name"] for record in state.bindings if record.get("is_verb") is True
             }
             return tuple(
                 {

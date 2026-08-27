@@ -67,10 +67,10 @@ Fillmore 的**单格唯一性公理**（同一句子中同一个格只能出现�
 
 ```python
 class SVK:
-    s: Subject                    # 第一论元，CLI 输入时独立
-    v: Verb                       # 动词，核心
-    kwargs: dict[str, Any]        # 其余论元，check() 时 S 作为独立第一参数传入
-    justification: TmsNode        # 引擎节点引用
+    s: Subject  # 第一论元，CLI 输入时独立
+    v: Verb  # 动词，核心
+    kwargs: dict[str, Any]  # 其余论元，check() 时 S 作为独立第一参数传入
+    justification: TmsNode  # 引擎节点引用
 ```
 
 **kwargs 解析**：Verb 收到 `check(S, **kwargs)`，S 是显式独立第一参数，必须处理；kwargs 为其余论元。`len(kwargs)>=0`（可空）。自我修改时 `kwargs={}`，仅 S 传入。
@@ -181,7 +181,7 @@ Worry:x          # 担忧节点
 ```python
 class BatteryHealthy(Worry):
     def check(self, s, *k, **kwargs):
-        return s.get("battery", 1.0) > 0.2   # True = 正常；False = 触发传播
+        return s.get("battery", 1.0) > 0.2  # True = 正常；False = 触发传播
 ```
 
 **形式化定位**: Worry = ECA 规则（Event-Condition-Action，Paton & Díaz 1999）。

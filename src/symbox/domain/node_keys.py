@@ -77,9 +77,7 @@ class NodeKey:
             raise DomainInvariantError("unknown node key namespace") from error
         expected = _ARITY[namespace]
         if len(parts) != expected + 1:
-            raise DomainInvariantError(
-                f"{namespace.value} node key requires {expected} components"
-            )
+            raise DomainInvariantError(f"{namespace.value} node key requires {expected} components")
         return cls(namespace, tuple(_decode_component(part) for part in parts[1:]))
 
     @classmethod

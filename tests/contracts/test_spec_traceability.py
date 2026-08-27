@@ -8,9 +8,7 @@ from pathlib import Path
 import pytest
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
-SPEC_ROOT = (
-    REPOSITORY_ROOT / "openspec" / "changes" / "initialize-symbox-v0.6" / "specs"
-)
+SPEC_ROOT = REPOSITORY_ROOT / "openspec" / "changes" / "initialize-symbox-v0.6" / "specs"
 SCENARIO_PATTERN = re.compile(r"^#### Scenario: (.+)$", re.MULTILINE)
 EXPECTED_CAPABILITIES = {
     "attribute-state",

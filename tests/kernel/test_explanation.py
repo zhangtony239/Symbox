@@ -40,9 +40,7 @@ def test_conflict_report_expands_both_reachable_polarities() -> None:
     for key in (source, health):
         kernel.register_node(TruthNode(key))
     kernel.assert_assumption(Assumption("source", source))
-    kernel.add_justification(
-        Justification("healthy", health, (Premise(source),), TruthValue.TRUE)
-    )
+    kernel.add_justification(Justification("healthy", health, (Premise(source),), TruthValue.TRUE))
     kernel.add_justification(
         Justification("unhealthy", health, (Premise(source),), TruthValue.FALSE)
     )

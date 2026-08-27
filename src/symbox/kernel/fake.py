@@ -170,6 +170,4 @@ class InMemoryTruthKernel:
         return tuple(sorted(self._nodes, key=NodeKey.encode))
 
     def _ordered_justifications(self) -> tuple[Justification, ...]:
-        return tuple(
-            sorted(self._justifications.values(), key=lambda rule: rule.justification_id)
-        )
+        return tuple(sorted(self._justifications.values(), key=lambda rule: rule.justification_id))

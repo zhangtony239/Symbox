@@ -21,8 +21,7 @@ def test_now_is_public_and_returns_persisted_relation_identity(tmp_path: Path) -
     rules = tmp_path / "rules"
     rules.mkdir()
     (rules / "checks.py").write_text(
-        "def moves(subject, destination, speed=1):\n"
-        "    return subject == 'robot' and speed > 0\n",
+        "def moves(subject, destination, speed=1):\n    return subject == 'robot' and speed > 0\n",
         encoding="utf-8",
     )
     assert _run(tmp_path, "create", "robot").returncode == 0

@@ -94,8 +94,7 @@ def similarity_confirmation(
         score=match.score,
         threshold=match.threshold,
         question=(
-            f"Should {match.proposed_key!r} be added alongside "
-            f"similar key {match.existing_key!r}?"
+            f"Should {match.proposed_key!r} be added alongside similar key {match.existing_key!r}?"
         ),
     )
 

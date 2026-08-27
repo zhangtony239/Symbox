@@ -64,15 +64,11 @@ def _expand(
     identity = node, value
     if identity in visiting:
         return (EvidenceStep(node, value, None, None, cycle=True),)
-    supports = tuple(
-        support for support in kernel.explain(node).supports if support.value is value
-    )
+    supports = tuple(support for support in kernel.explain(node).supports if support.value is value)
     if not supports:
         return (EvidenceStep(node, value, None, None),)
     next_visiting = visiting | {identity}
-    return tuple(
-        _expand_support(kernel, node, support, next_visiting) for support in supports
-    )
+    return tuple(_expand_support(kernel, node, support, next_visiting) for support in supports)
 
 
 def _expand_support(

@@ -144,9 +144,7 @@ class GitBackupRepository:
             try:
                 created_at = datetime.fromisoformat(raw_timestamp).astimezone(UTC)
             except ValueError as error:
-                raise BackupError(
-                    f"backup commit has invalid timestamp: {commit_id}"
-                ) from error
+                raise BackupError(f"backup commit has invalid timestamp: {commit_id}") from error
             records.append(BackupRecord(commit_id, note, created_at))
         return tuple(
             sorted(
@@ -166,9 +164,7 @@ class GitBackupRepository:
         if len(normalized) != len(set(normalized)):
             raise BackupError("backup ids must be unique")
         invalid = tuple(
-            identifier
-            for identifier in normalized
-            if not re.fullmatch(r"[0-9a-f]{40}", identifier)
+            identifier for identifier in normalized if not re.fullmatch(r"[0-9a-f]{40}", identifier)
         )
         if invalid:
             raise BackupError(f"backup ids must be full commit ids: {invalid}")
@@ -190,10 +186,7 @@ class GitBackupRepository:
                 raise BackupNotFoundError(f"unknown backup ids: {tuple(unknown)}")
 
             commands = ["start"]
-            commands.extend(
-                f"delete {reference} {current}"
-                for reference, current in resolved
-            )
+            commands.extend(f"delete {reference} {current}" for reference, current in resolved)
             commands.extend(("prepare", "commit"))
             payload = ("\n".join(commands) + "\n").encode()
             self._run("update-ref", "--stdin", input_bytes=payload)

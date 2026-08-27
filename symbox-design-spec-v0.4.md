@@ -59,7 +59,7 @@ def check(s, o) -> bool:
 ```python
 class BatteryHealthy(Worry):
     def check(self, s, o):
-        return s.get("battery", 1.0) > 0.2   # True = 正常，False = 触发传播
+        return s.get("battery", 1.0) > 0.2  # True = 正常，False = 触发传播
 ```
 
 ### 属性操作（带阈值检测）
@@ -128,7 +128,7 @@ LLM 确认后加 `--force` 强制执行。
 # 概念示意：节点语义 = "电池健康"
 class BatteryHealthy(Worry):
     def check(self, s, o):
-        return s.get("battery", 1.0) > 0.2   # True = 正常；False = 电量过低，触发传播
+        return s.get("battery", 1.0) > 0.2  # True = 正常；False = 电量过低，触发传播
 ```
 
 **形式化定位（学术锚点）**: Worry 在机制上是 **ECA 规则**（Event-Condition-Action，Paton & Díaz 1999）：属性 set 是 Event，`check()` 是 Condition，节点翻转触发传播是 Action。被监控的值（`battery.level`）是数值 fluent，派生的健康节点是命题 fluent——但 Worry 监控器本身不是 fluent。详见 §5 血统表。

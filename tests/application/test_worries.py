@@ -39,8 +39,7 @@ def _write_check(project: Path) -> None:
     rules = project / "rules"
     rules.mkdir()
     (rules / "checks.py").write_text(
-        "def healthy(subject, threshold=10):\n"
-        "    return subject['level'] >= threshold\n",
+        "def healthy(subject, threshold=10):\n    return subject['level'] >= threshold\n",
         encoding="utf-8",
     )
 
@@ -174,8 +173,7 @@ def test_unaffected_worry_is_not_executed(tmp_path: Path) -> None:
     rules = tmp_path / "rules"
     rules.mkdir()
     (rules / "checks.py").write_text(
-        "def explode(subject):\n"
-        "    raise RuntimeError('must not run')\n",
+        "def explode(subject):\n    raise RuntimeError('must not run')\n",
         encoding="utf-8",
     )
     registered = create_worry(
@@ -207,8 +205,7 @@ def test_worry_exception_discards_attribute_and_health_candidates(tmp_path: Path
     rules = tmp_path / "rules"
     rules.mkdir()
     (rules / "checks.py").write_text(
-        "def explode(subject):\n"
-        "    raise RuntimeError('boom')\n",
+        "def explode(subject):\n    raise RuntimeError('boom')\n",
         encoding="utf-8",
     )
     registered = create_worry(

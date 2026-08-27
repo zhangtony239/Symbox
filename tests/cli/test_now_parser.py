@@ -20,9 +20,7 @@ def test_multiple_positionals_preserve_order_and_json_types() -> None:
 
 
 def test_mixed_positional_and_named_arguments_are_lossless() -> None:
-    parsed = parse_now_tokens(
-        ("robot", "moves", "dock", "speed=2", "metadata={\"safe\":true}")
-    )
+    parsed = parse_now_tokens(("robot", "moves", "dock", "speed=2", 'metadata={"safe":true}'))
 
     assert parsed.args == ("dock",)
     assert parsed.kwargs == (("speed", 2), ("metadata", {"safe": True}))
