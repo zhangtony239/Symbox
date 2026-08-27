@@ -7,14 +7,14 @@ import re
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from filelock import FileLock, Timeout
 
 from symbox.persistence.state_format import StateDocument
-from symbox.persistence.state_repository import ProjectScope
+from symbox.persistence.state_repository import ProjectScope, StateRepository
 
 
 class BackupError(RuntimeError):
@@ -198,6 +198,30 @@ class GitBackupRepository:
             payload = ("\n".join(commands) + "\n").encode()
             self._run("update-ref", "--stdin", input_bytes=payload)
 
+    def rollback(self, commit_id: str, state_repository: StateRepository) -> StateDocument:
+        """Validate a managed snapshot before atomically publishing it as current state."""
+        normalized = self._normalize_commit_id(commit_id)
+        if state_repository.scope.root != self.scope.root:
+            raise BackupError("backup and state repositories must use the same project scope")
+
+        with self.locked():
+            if not self.git_dir.exists():
+                raise BackupNotFoundError(f"unknown backup id: {normalized}")
+            self._ensure_initialized_unlocked()
+            reference = self._managed_ref(normalized)
+            if self._try_resolve_ref(reference) != normalized:
+                raise BackupNotFoundError(f"unknown backup id: {normalized}")
+            content = self._run_bytes("show", f"{normalized}:state.json")
+            try:
+                snapshot = StateDocument.from_bytes(content)
+            except ValueError as error:
+                raise BackupError(f"backup snapshot is invalid: {normalized}") from error
+
+        committed = state_repository.load()
+        candidate = replace(snapshot, revision=committed.revision + 1)
+        state_repository.save(candidate)
+        return candidate
+
     @contextmanager
     def locked(self) -> Iterator[None]:
         """Serialize all ref and object operations for this project."""
@@ -236,6 +260,31 @@ class GitBackupRepository:
     @staticmethod
     def _managed_ref(commit_id: str) -> str:
         return f"refs/symbox/backups/{commit_id}"
+
+    @staticmethod
+    def _normalize_commit_id(commit_id: str) -> str:
+        normalized = commit_id.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", normalized):
+            raise BackupError("backup id must be a full commit id")
+        return normalized
+
+    def _run_bytes(self, *arguments: str) -> bytes:
+        command = ["git", f"--git-dir={self.git_dir}", *arguments]
+        try:
+            return subprocess.run(
+                command,
+                capture_output=True,
+                check=True,
+            ).stdout
+        except (OSError, subprocess.CalledProcessError) as error:
+            stderr = (
+                error.stderr.decode("utf-8", errors="replace").strip()
+                if isinstance(error, subprocess.CalledProcessError)
+                else ""
+            )
+            detail = f": {stderr}" if stderr else ""
+            operation = " ".join(arguments)
+            raise BackupError(f"git backup operation failed ({operation}){detail}") from error
 
     def _run(
         self,

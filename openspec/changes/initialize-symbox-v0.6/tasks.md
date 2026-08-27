@@ -79,7 +79,7 @@
 - [x] 10.2 实现 `backup create`，把规范状态写为 tree/commit 并返回稳定 commit id
 - [x] 10.3 实现 `backup list` 的 note、时间、id 确定排序和统一 list 入口集成
 - [x] 10.4 实现受管理 refs 与先全量验证后更新的原子批量 `backup delete`
-- [ ] 10.5 实现 rollback 的临时读取、完整状态验证和事务式原子恢复
+- [x] 10.5 实现 `backup rollback` 的临时读取、完整状态验证和事务式原子恢复
 - [ ] 10.6 添加首次创建、跨项目隔离、删除含未知 id、损坏快照、并发 ref 与凭据排除测试
 
 ## 11. 集成验证与项目文档

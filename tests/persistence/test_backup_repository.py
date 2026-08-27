@@ -16,7 +16,7 @@ from symbox.persistence.backup_repository import (
     GitBackupRepository,
 )
 from symbox.persistence.state_format import StateDocument
-from symbox.persistence.state_repository import ProjectScope
+from symbox.persistence.state_repository import ProjectScope, StateRepository
 
 
 def _is_bare(path: Path) -> str:
@@ -165,3 +165,37 @@ def test_delete_with_unknown_id_preserves_every_requested_backup(tmp_path: Path)
         repository.delete((first.commit_id, "f" * 40, second.commit_id))
 
     assert repository.list_backups() == before
+
+
+def test_rollback_validates_snapshot_and_atomically_restores_canonical_state(
+    tmp_path: Path,
+) -> None:
+    scope = ProjectScope(tmp_path)
+    states = StateRepository(scope)
+    backups = GitBackupRepository(scope)
+    original = StateDocument(revision=1, objects=({"name": "before"},))
+    states.save(original)
+    backup = backups.create(original, "before experiment")
+    current = StateDocument(revision=2, objects=({"name": "after"},))
+    states.save(current)
+
+    restored = backups.rollback(backup.commit_id, states)
+
+    assert restored.revision == 3
+    assert restored.objects == original.objects
+    assert states.load() == restored
+
+
+def test_rollback_unknown_id_preserves_current_state_bytes(tmp_path: Path) -> None:
+    scope = ProjectScope(tmp_path)
+    states = StateRepository(scope)
+    backups = GitBackupRepository(scope)
+    current = StateDocument(revision=1, objects=({"name": "current"},))
+    states.save(current)
+    before = scope.state_path.read_bytes()
+
+    with pytest.raises(BackupNotFoundError, match="unknown backup id"):
+        backups.rollback("f" * 40, states)
+
+    assert scope.state_path.read_bytes() == before
+    assert states.load() == current
