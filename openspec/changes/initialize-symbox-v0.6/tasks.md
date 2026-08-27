@@ -55,7 +55,7 @@
 - [x] 7.3 实现 Verb True=通过/False=冲突的检查流程及结构化诊断
 - [x] 7.4 将通过的 SVK 注册为粗粒度真值节点并接入 Adj veto/modify 与统一传播
 - [x] 7.5 添加零后置论元、多个位置论元、混合参数、顺序等价和参数差异身份测试
-- [x] 7.6 添加端到端测试确认只暴露 `now`，不形成 `svo` 兼容面
+- [x] 7.6 添加端到端测试确认 `svo` 已被 `now` 彻底替换并移除
 
 ## 8. Worry ECA 监控
 
@@ -84,7 +84,7 @@
 
 ## 11. 集成验证与项目文档
 
-- [ ] 11.1 为 create/delete/bind/unbind/set/unset/now/list/backup 全命令树添加端到端 subprocess 测试
+- [x] 11.1 为 create/delete/bind/unbind/set/unset/now/list/backup 全命令树添加端到端 subprocess 测试
 - [ ] 11.2 添加故障注入测试，覆盖解析、binding、kernel、embedding、持久化和 Git 各阶段失败
 - [ ] 11.3 验证每个写命令成功只提交一次、失败保持内存与磁盘状态不变
 - [ ] 11.4 更新 README，记录 v0.6 CLI、SVK 示例、Worry 极性、配置、状态目录和当前推理边界

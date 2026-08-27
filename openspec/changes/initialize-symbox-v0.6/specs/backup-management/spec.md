@@ -27,7 +27,7 @@
 - **THEN** 系统返回错误且不得留下可见的半成品快照
 
 ### Requirement: 查看和删除快照
-系统 SHALL 按确定顺序列出快照标识、note 与创建时间，并 SHALL 支持一次删除一个或多个指定快照；包含未知标识的批量删除 MUST 不删除任何目标。
+系统 SHALL 通过 `backup list` 按确定顺序列出快照标识、note 与创建时间，并 SHALL 支持一次删除一个或多个指定快照；`backup log` 已被 `backup list` 彻底替换并移除，系统 MUST NOT 注册、接受或保留任何 `backup log` 兼容别名；包含未知标识的批量删除 MUST 不删除任何目标。
 
 #### Scenario: 查看历史
 - **WHEN** 调用方请求 backup 日志

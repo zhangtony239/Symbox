@@ -89,7 +89,7 @@ v0.6 原文的 key 示例存在 `SVK:hash` 与 `SVK:s:v:hash` 两种展示，本
 
 stdout 输出单个 JSON envelope：`status`、`data`、`diagnostics`、`conflicts`、`transaction_id`；stderr 只用于无法形成 envelope 的启动级故障。成功和 `confirm_needed` 使用可区分状态，验证/冲突/系统错误使用非零退出码分类。list 输出数组按规范字段排序，查询不得触发可变更状态的 callable。
 
-命令树提供 `create`、`delete`、`bind`、`unbind`、`set`、`unset`、`now`、`list` 和 `backup {create,delete,rollback,list}`。不注册 `svo` 别名，以避免形成未规范化兼容面。
+命令树提供 `create`、`delete`、`bind`、`unbind`、`set`、`unset`、`now`、`list` 和 `backup {create,delete,rollback,list}`。
 
 **替代方案：**人类文本加部分 JSON 会迫使 Agent 解析日志，拒绝。
 
