@@ -32,7 +32,6 @@ def test_now_is_public_and_returns_persisted_relation_identity(tmp_path: Path) -
             tmp_path,
             "bind",
             "moves",
-            "moves",
             "-f",
             "rules/checks.py",
             "--verb",

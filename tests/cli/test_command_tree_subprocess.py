@@ -41,7 +41,6 @@ def test_full_write_query_and_backup_command_tree(tmp_path: Path) -> None:
         tmp_path,
         "bind",
         "moves",
-        "moves",
         "-f",
         "rules/checks.py",
         "--verb",

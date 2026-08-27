@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     bind = commands.add_parser("bind", help="bind project-local Python code")
     bind.add_argument("name")
-    bind.add_argument("qualified_name")
+    bind.add_argument("qualified_name", nargs="?")
     bind.add_argument("-f", "--file", required=True)
     bind.add_argument("--verb", action="store_true")
     unbind = commands.add_parser("unbind", help="remove an object's binding")
@@ -83,7 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             data = runtime.bind(
                 arguments.name,
                 arguments.file,
-                arguments.qualified_name,
+                arguments.qualified_name or arguments.name,
                 is_verb=arguments.verb,
             )
         elif arguments.command == "unbind":
