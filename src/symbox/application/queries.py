@@ -36,6 +36,24 @@ class ObjectSummary:
     is_verb: bool
 
 
+@dataclass(frozen=True, slots=True)
+class BindingSummary:
+    """Persistence-safe binding metadata that never resolves the callable."""
+
+    source_path: str
+    qualified_name: str
+    source_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class VerbSummary:
+    """One explicitly marked Verb and its currently available binding."""
+
+    name: str
+    category: ObjectCategory
+    binding: BindingSummary
+
+
 def list_objects(state: QueryState) -> tuple[ObjectSummary, ...]:
     """Return all object handles in deterministic name order."""
     return tuple(
@@ -45,4 +63,24 @@ def list_objects(state: QueryState) -> tuple[ObjectSummary, ...]:
             is_verb=state.objects.is_verb(subject.name),
         )
         for subject in state.objects.objects.objects
+    )
+
+
+def list_verbs(state: QueryState) -> tuple[VerbSummary, ...]:
+    """Return only explicitly marked Verb objects without loading their callables."""
+    categories = {
+        subject.name: subject.category for subject in state.objects.objects.objects
+    }
+    return tuple(
+        VerbSummary(
+            name=entry.object_name,
+            category=categories[entry.object_name],
+            binding=BindingSummary(
+                source_path=entry.reference.source_path,
+                qualified_name=entry.reference.qualified_name,
+                source_digest=entry.reference.source_digest,
+            ),
+        )
+        for entry in state.objects.bindings
+        if entry.reference.is_verb
     )
