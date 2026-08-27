@@ -73,7 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line adapter."""
-    arguments = build_parser().parse_args(argv)
+    parser = build_parser()
+    arguments = parser.parse_args(argv)
+    if arguments.command is None and not arguments.version:
+        parser.print_help()
+        return 0
+
     try:
         runtime = CommandRuntime(arguments.root)
         if arguments.version:
@@ -107,8 +112,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             data = runtime.backup_delete(tuple(arguments.commit_ids))
         elif arguments.command == "backup" and arguments.backup_command == "rollback":
             data = runtime.backup_rollback(arguments.commit_id)
-        else:
-            data = {"command": "sbox"}
         result = ResultEnvelope(status=ResultStatus.SUCCESS, data=data)
     except BackupNotFoundError as error:
         result = _error_result(error, ErrorCategory.NOT_FOUND, "backup_not_found")

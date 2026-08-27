@@ -9,6 +9,26 @@ from pathlib import Path
 from typing import Any
 
 
+def test_no_arguments_is_equivalent_to_help() -> None:
+    bare = subprocess.run(
+        [sys.executable, "-m", "symbox.cli.main"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    explicit_help = subprocess.run(
+        [sys.executable, "-m", "symbox.cli.main", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert bare.returncode == explicit_help.returncode == 0
+    assert bare.stdout == explicit_help.stdout
+    assert bare.stderr == explicit_help.stderr == ""
+    assert bare.stdout.startswith("usage: sbox")
+
+
 def _run(root: Path, *arguments: str) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     completed = subprocess.run(
         [sys.executable, "-m", "symbox.cli.main", "--root", str(root), *arguments],
