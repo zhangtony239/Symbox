@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from pathlib import Path
 
 import pytest
 
@@ -21,6 +22,8 @@ from symbox.domain.models import SVK, BindingRef, ObjectCategory
 from symbox.domain.node_keys import NodeKey
 from symbox.kernel.fake import InMemoryTruthKernel
 from symbox.kernel.port import Assumption, Justification, Premise, TruthNode, TruthValue
+from symbox.persistence.state_format import StateDocument
+from symbox.persistence.state_repository import ProjectScope, StateRepository
 
 
 def _objects() -> BindingState:
@@ -149,3 +152,51 @@ def test_object_detail_rejects_unknown_name_without_mutating_query_state() -> No
         get_object_detail(state, "missing")
 
     assert list_objects(state) == before
+
+
+def test_repeated_queries_do_not_write_state_or_execute_binding(tmp_path: Path) -> None:
+    marker = tmp_path / "binding-ran"
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    source = rules / "side_effect.py"
+    source.write_text(
+        "from pathlib import Path\n"
+        f"Path({str(marker)!r}).write_text('ran')\n"
+        "def check(subject):\n"
+        "    return True\n",
+        encoding="utf-8",
+    )
+    scope = ProjectScope(tmp_path)
+    repository = StateRepository(scope)
+    repository.save(StateDocument(revision=1, objects=({"name": "zeta"},)))
+    before_bytes = scope.state_path.read_bytes()
+    before_mtime = scope.state_path.stat().st_mtime_ns
+
+    objects = _objects()
+    side_effect_binding = BindingRef(
+        "rules/side_effect.py",
+        "check",
+        "d" * 64,
+        is_verb=True,
+    )
+    query = QueryState(
+        BindingState(
+            objects.objects,
+            (BindingEntry("zeta", side_effect_binding),),
+        )
+    )
+    first = (
+        list_objects(query),
+        list_verbs(query),
+        get_object_detail(query, "zeta"),
+    )
+    second = (
+        list_objects(query),
+        list_verbs(query),
+        get_object_detail(query, "zeta"),
+    )
+
+    assert first == second
+    assert scope.state_path.read_bytes() == before_bytes
+    assert scope.state_path.stat().st_mtime_ns == before_mtime
+    assert not marker.exists()
