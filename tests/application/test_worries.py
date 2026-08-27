@@ -11,6 +11,7 @@ from symbox.application.mutations import BindingExecutionError
 from symbox.application.objects import ObjectState, create_object
 from symbox.application.worries import (
     WorryAlreadyExistsError,
+    WorryConvergenceError,
     WorryMonitoringState,
     WorryState,
     attribute_dependency,
@@ -320,3 +321,102 @@ def test_propagation_tail_reevaluates_worry_affected_by_health_change(
     assert updated.kernel is not None
     assert updated.kernel.truth(NodeKey.worry("level-ok")) is TruthValue.TRUE
     assert updated.kernel.truth(NodeKey.worry("system-ok")) is TruthValue.TRUE
+
+
+def test_iteration_boundary_aborts_entire_attribute_candidate(tmp_path: Path) -> None:
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "checks.py").write_text(
+        "def level_healthy(subject):\n"
+        "    return subject['level'] >= 10\n\n"
+        "def system_healthy(subject):\n"
+        "    return subject['level-ok'] == 'true'\n",
+        encoding="utf-8",
+    )
+    registered = create_worry(
+        _state("tank"),
+        "level-ok",
+        (attribute_dependency("tank", "level"),),
+    )
+    registered = create_worry(
+        registered,
+        "system-ok",
+        (NodeKey.worry("level-ok").encode(),),
+    )
+    bound, level_binding = bind_worry(
+        registered,
+        ProjectPythonBindingLoader(),
+        tmp_path,
+        "level-ok",
+        "rules/checks.py",
+        "level_healthy",
+    )
+    bound, system_binding = bind_worry(
+        bound,
+        ProjectPythonBindingLoader(),
+        tmp_path,
+        "system-ok",
+        "rules/checks.py",
+        "system_healthy",
+    )
+    committed = WorryMonitoringState(bound)
+
+    with pytest.raises(WorryConvergenceError, match="exceeded") as failure:
+        set_monitored_attributes(
+            committed,
+            "tank",
+            {"level": 12},
+            {"level-ok": level_binding, "system-ok": system_binding},
+            max_iterations=1,
+        )
+
+    assert failure.value.iterations == 1
+    assert "pending[Worry:level-ok]" in failure.value.signature
+    assert committed.attributes == ()
+    assert committed.kernel is not None
+    assert committed.kernel.truth(NodeKey.worry("level-ok")) is TruthValue.UNKNOWN
+    assert committed.kernel.truth(NodeKey.worry("system-ok")) is TruthValue.UNKNOWN
+
+
+def test_repeated_state_signature_aborts_oscillating_worry(tmp_path: Path) -> None:
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "checks.py").write_text(
+        "flip = False\n\n"
+        "def oscillate(subject):\n"
+        "    global flip\n"
+        "    flip = not flip\n"
+        "    return flip\n",
+        encoding="utf-8",
+    )
+    registered = create_worry(
+        _state("tank"),
+        "oscillator",
+        (
+            attribute_dependency("tank", "level"),
+            NodeKey.worry("oscillator").encode(),
+        ),
+    )
+    bound, loaded = bind_worry(
+        registered,
+        ProjectPythonBindingLoader(),
+        tmp_path,
+        "oscillator",
+        "rules/checks.py",
+        "oscillate",
+    )
+    committed = WorryMonitoringState(bound)
+
+    with pytest.raises(WorryConvergenceError, match="repeated a state") as failure:
+        set_monitored_attributes(
+            committed,
+            "tank",
+            {"level": 12},
+            {"oscillator": loaded},
+        )
+
+    assert failure.value.iterations == 3
+    assert "Worry:oscillator" in failure.value.signature
+    assert committed.attributes == ()
+    assert committed.kernel is not None
+    assert committed.kernel.truth(NodeKey.worry("oscillator")) is TruthValue.UNKNOWN

@@ -31,6 +31,15 @@ class WorryNotFoundError(ObjectNotFoundError):
     """Raised when a Worry operation targets an unknown monitor."""
 
 
+class WorryConvergenceError(DomainInvariantError):
+    """Raised when Worry tail evaluation repeats or exceeds its safety boundary."""
+
+    def __init__(self, message: str, *, iterations: int, signature: str) -> None:
+        super().__init__(message)
+        self.iterations = iterations
+        self.signature = signature
+
+
 @dataclass(frozen=True, slots=True)
 class WorryState:
     """Generic object bindings plus deterministic Worry dependency metadata."""
@@ -164,8 +173,16 @@ def set_monitored_attributes(
     subject: str,
     values: dict[str, Any],
     loaded_bindings: Mapping[str, LoadedBinding],
+    *,
+    max_iterations: int = 32,
 ) -> WorryMonitoringState:
     """Set attributes and immediately evaluate affected bound Worries atomically."""
+    if (
+        not isinstance(max_iterations, int)
+        or isinstance(max_iterations, bool)
+        or max_iterations <= 0
+    ):
+        raise DomainInvariantError("worry max_iterations must be a positive integer")
     kernel = _monitoring_kernel(state)
     object_state = ObjectState(state.worries.objects.objects.objects, kernel)
     bindings = BindingState(object_state, state.worries.objects.bindings)
@@ -181,6 +198,7 @@ def set_monitored_attributes(
         candidate_attributes.attributes,
         changed,
         loaded_bindings,
+        max_iterations,
     )
     return WorryMonitoringState(candidate, candidate_attributes.attributes, _kernel(candidate))
 
@@ -195,10 +213,21 @@ def _evaluate_affected(
     attributes: tuple[AttributeEntry, ...],
     changed: tuple[str, ...],
     loaded_bindings: Mapping[str, LoadedBinding],
+    max_iterations: int,
 ) -> WorryState:
     candidate = _kernel(state).clone()
     pending = tuple(sorted(set(changed)))
+    seen: set[str] = set()
+    iterations = 0
     while pending:
+        iterations += 1
+        if iterations > max_iterations:
+            signature = _state_signature(candidate, state.worries, pending)
+            raise WorryConvergenceError(
+                f"worry evaluation exceeded {max_iterations} iterations",
+                iterations=iterations - 1,
+                signature=signature,
+            )
         snapshots = _dependency_snapshots(attributes, candidate, state.worries)
         for worry in state.affected_by(pending):
             _evaluate_worry(state, worry, snapshots, loaded_bindings, candidate)
@@ -208,6 +237,15 @@ def _evaluate_affected(
             conflicts = ", ".join(conflict.node.encode() for conflict in report.conflicts)
             raise DomainInvariantError(f"worry propagation conflict: {conflicts}")
         pending = tuple(key.encode() for key in report.changed)
+        if pending:
+            signature = _state_signature(candidate, state.worries, pending)
+            if signature in seen:
+                raise WorryConvergenceError(
+                    "worry evaluation repeated a state before reaching stability",
+                    iterations=iterations,
+                    signature=signature,
+                )
+            seen.add(signature)
 
     objects = BindingState(
         ObjectState(state.objects.objects.objects, candidate),
@@ -265,6 +303,18 @@ def _truth_snapshot(kernel: TruthKernel, dependency: str) -> str | None:
         return kernel.truth(NodeKey.parse(dependency)).value
     except DomainInvariantError:
         return None
+
+
+def _state_signature(
+    kernel: TruthKernel,
+    worries: tuple[Worry, ...],
+    pending: tuple[str, ...],
+) -> str:
+    truths = ",".join(
+        f"{worry.name}={kernel.truth(NodeKey.worry(worry.name)).value}"
+        for worry in worries
+    )
+    return f"truths[{truths}];pending[{','.join(sorted(pending))}]"
 
 
 def _replace_health_support(kernel: TruthKernel, worry_name: str, healthy: bool) -> None:
