@@ -5,10 +5,10 @@
 
 ## 2. 创建 Symbox Agent Skill
 
-- [ ] 2.1 创建 `skills/symbox/SKILL.md`，加入与目录匹配的标准 YAML frontmatter，并在 description 中覆盖 Skill 能力和具体触发场景
-- [ ] 2.2 编写 Symbox 心智模型，明确它用于外化 Agent 内在逻辑世界而非项目管理，并说明 Object、Verb、Adj、Worry 与有限推理保证
-- [ ] 2.3 编写约束建模和认知同步流程，指导 Agent 将检查关系写入 Verb/Adj、遵循 Worry 极性，并使用 `now` 的 SVK 可变长论元同步当下所想
-- [ ] 2.4 编写结果处理规则和可执行示例，覆盖成功、确认、验证失败及冲突；要求 Agent 修正假设或建模而不是绕过检查、伪造状态或把无冲突等同于现实真相
+- [x] 2.1 创建 `skills/symbox/SKILL.md`，加入与目录匹配的标准 YAML frontmatter，并在 description 中覆盖 Skill 能力和具体触发场景
+- [x] 2.2 编写 Symbox 心智模型，明确它用于外化 Agent 内在逻辑世界而非项目管理，并说明 Object、Verb、Adj、Worry 与有限推理保证
+- [x] 2.3 编写约束建模和认知同步流程，指导 Agent 将检查关系写入 Verb/Adj、遵循 Worry 极性，并使用 `now` 的 SVK 可变长论元同步当下所想
+- [x] 2.4 编写结果处理规则和可执行示例，覆盖成功、确认、验证失败及冲突；要求 Agent 修正假设或建模而不是绕过检查、伪造状态或把无冲突等同于现实真相
 
 ## 3. 精简项目 README
 
